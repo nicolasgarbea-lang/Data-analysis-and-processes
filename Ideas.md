@@ -56,6 +56,10 @@ Each event happens only once or twice in the data, so the model can't learn much
 - A nearly full hotel might mean more guests booking several hotels just in case.
 - **Limit:** only count bookings that were made before this booking. Otherwise we use information from the future.
 
+Fuel prices
+Political situations of pples country
+Exchange rate
+
 ### Rules to keep it honest
 
 1. **Only use what was known at prediction time.** Holidays and planned events are fine because they are known in advance. Real weather and future bookings are not.
