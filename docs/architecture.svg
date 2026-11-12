@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 1150" width="1100" height="1150" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">Hotel cancellation prediction: project architecture</title>
+  <desc id="d">Seven stages from top to bottom: data, preparation, time split, models, evaluation, app, and the hotel manager's decision.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748B"/>
+    </marker>
+    <style>
+      .title { font-size: 22px; font-weight: 700; fill: #0F172A; }
+      .sub   { font-size: 13px; fill: #475569; }
+      .stage { font-size: 14px; font-weight: 700; fill: #0F172A; }
+      .num   { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+      .h     { font-size: 15px; font-weight: 700; fill: #0F172A; }
+      .p     { font-size: 13px; fill: #334155; }
+      .s     { font-size: 12px; fill: #475569; }
+      .sb    { font-size: 12px; font-weight: 700; fill: #0F172A; }
+      .mono  { font-size: 12px; fill: #475569; font-family: Consolas, Menlo, monospace; }
+      .box   { fill: #FFFFFF; stroke: #CBD5E1; stroke-width: 1.5; }
+      .opt   { fill: #FFFFFF; stroke: #94A3B8; stroke-width: 1.5; stroke-dasharray: 6 5; }
+      .chip  { fill: #F1F5F9; stroke: none; }
+      .acc   { fill: #EFF6FF; stroke: #60A5FA; stroke-width: 1.5; }
+      .tag   { fill: #1D4ED8; }
+      .tagt  { font-size: 11px; font-weight: 700; fill: #FFFFFF; }
+      .flow  { stroke: #64748B; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+      .rule  { stroke: #E2E8F0; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect width="1100" height="1150" fill="#FFFFFF"/>
+
+  <text x="30" y="38" class="title">Predicting hotel cancellations: project architecture</text>
+  <text x="30" y="60" class="sub">From raw bookings to a recommendation the hotel manager can act on</text>
+
+  <!-- Stage labels -->
+  <g>
+    <circle cx="44" cy="126" r="13" fill="#1D4ED8"/><text x="44" y="131" text-anchor="middle" class="num">1</text>
+    <text x="66" y="131" class="stage">Data</text>
+
+    <circle cx="44" cy="270" r="13" fill="#1D4ED8"/><text x="44" y="275" text-anchor="middle" class="num">2</text>
+    <text x="66" y="275" class="stage">Preparation</text>
+
+    <circle cx="44" cy="408" r="13" fill="#1D4ED8"/><text x="44" y="413" text-anchor="middle" class="num">3</text>
+    <text x="66" y="413" class="stage">Time split</text>
+
+    <circle cx="44" cy="569" r="13" fill="#1D4ED8"/><text x="44" y="574" text-anchor="middle" class="num">4</text>
+    <text x="66" y="574" class="stage">Models</text>
+
+    <circle cx="44" cy="746" r="13" fill="#1D4ED8"/><text x="44" y="751" text-anchor="middle" class="num">5</text>
+    <text x="66" y="751" class="stage">Evaluation</text>
+
+    <circle cx="44" cy="927" r="13" fill="#1D4ED8"/><text x="44" y="932" text-anchor="middle" class="num">6</text>
+    <text x="66" y="932" class="stage">App</text>
+
+    <circle cx="44" cy="1088" r="13" fill="#1D4ED8"/><text x="44" y="1093" text-anchor="middle" class="num">7</text>
+    <text x="66" y="1093" class="stage">Decision</text>
+  </g>
+
+  <!-- 1 Data -->
+  <rect x="190" y="80" width="420" height="92" rx="8" class="box"/>
+  <text x="400" y="108" text-anchor="middle" class="h">Hotel Booking Demand dataset</text>
+  <text x="400" y="130" text-anchor="middle" class="p">119,390 bookings · 2 hotels in Portugal · 2015–2017</text>
+  <text x="400" y="152" text-anchor="middle" class="mono">data/hotels.csv</text>
+
+  <rect x="650" y="80" width="420" height="92" rx="8" class="opt"/>
+  <text x="860" y="108" text-anchor="middle" class="h">Extra data (optional)</text>
+  <text x="860" y="130" text-anchor="middle" class="p">Portuguese holidays · events in Lisbon</text>
+  <text x="860" y="150" text-anchor="middle" class="p">Pound-to-euro exchange rate</text>
+
+  <path d="M400,172 L400,206" class="flow"/>
+  <path d="M860,172 L860,206" class="flow"/>
+
+  <!-- 2 Preparation -->
+  <rect x="190" y="210" width="880" height="120" rx="8" class="box"/>
+  <text x="630" y="238" text-anchor="middle" class="h">Cleaning and feature engineering</text>
+
+  <rect x="206" y="254" width="272" height="60" rx="6" class="chip"/>
+  <text x="342" y="279" text-anchor="middle" class="sb">Remove columns that give away the answer</text>
+  <text x="342" y="298" text-anchor="middle" class="s">for example reservation_status</text>
+
+  <rect x="494" y="254" width="272" height="60" rx="6" class="chip"/>
+  <text x="630" y="279" text-anchor="middle" class="sb">Leave out guest nationality</text>
+  <text x="630" y="298" text-anchor="middle" class="s">so nobody is judged by their country</text>
+
+  <rect x="782" y="254" width="272" height="60" rx="6" class="chip"/>
+  <text x="918" y="279" text-anchor="middle" class="sb">Add new features</text>
+  <text x="918" y="298" text-anchor="middle" class="s">season, length of stay, price vs. normal</text>
+
+  <path d="M630,330 L630,366" class="flow"/>
+
+  <!-- 3 Time split -->
+  <rect x="190" y="370" width="570" height="62" rx="8" class="box"/>
+  <text x="475" y="396" text-anchor="middle" class="h">Train: arrivals in 2015 and 2016</text>
+  <text x="475" y="417" text-anchor="middle" class="p">78,703 bookings</text>
+
+  <rect x="770" y="370" width="300" height="62" rx="8" class="acc"/>
+  <text x="920" y="396" text-anchor="middle" class="h">Test: arrivals in 2017</text>
+  <text x="920" y="417" text-anchor="middle" class="p">40,687 bookings</text>
+
+  <text x="630" y="454" text-anchor="middle" class="s">The models are tested on a later year that they have never seen.</text>
+
+  <path d="M630,466 L630,506" class="flow"/>
+
+  <!-- 4 Models -->
+  <rect x="190" y="510" width="250" height="118" rx="8" class="opt"/>
+  <text x="315" y="540" text-anchor="middle" class="h">Baseline</text>
+  <text x="315" y="566" text-anchor="middle" class="p">A simple rule of thumb:</text>
+  <text x="315" y="586" text-anchor="middle" class="p">booked far in advance = high risk</text>
+  <text x="315" y="610" text-anchor="middle" class="s">The models have to beat this.</text>
+
+  <rect x="456" y="510" width="299" height="118" rx="8" class="acc"/>
+  <text x="605" y="540" text-anchor="middle" class="h">Model A · at booking time</text>
+  <text x="605" y="566" text-anchor="middle" class="p">How likely is this booking</text>
+  <text x="605" y="586" text-anchor="middle" class="p">to be cancelled?</text>
+  <text x="605" y="610" text-anchor="middle" class="s">Supports: booking conditions</text>
+
+  <rect x="771" y="510" width="299" height="118" rx="8" class="acc"/>
+  <text x="920" y="540" text-anchor="middle" class="h">Model B · days before arrival</text>
+  <text x="920" y="566" text-anchor="middle" class="p">Who will cancel at the last minute</text>
+  <text x="920" y="586" text-anchor="middle" class="p">or not show up?</text>
+  <text x="920" y="610" text-anchor="middle" class="s">Supports: overbooking</text>
+
+  <text x="763" y="650" text-anchor="middle" class="s">Methods compared: logistic regression, decision tree, random forest, gradient boosting</text>
+
+  <path d="M630,662 L630,690" class="flow"/>
+
+  <!-- 5 Evaluation -->
+  <rect x="190" y="694" width="880" height="104" rx="8" class="box"/>
+  <text x="630" y="721" text-anchor="middle" class="h">Honest evaluation on the 2017 bookings</text>
+
+  <rect x="206" y="734" width="200" height="50" rx="6" class="chip"/>
+  <text x="306" y="755" text-anchor="middle" class="sb">Precision and recall</text>
+  <text x="306" y="773" text-anchor="middle" class="s">compared with the baseline</text>
+
+  <rect x="422" y="734" width="200" height="50" rx="6" class="chip"/>
+  <text x="522" y="755" text-anchor="middle" class="sb">Calibration</text>
+  <text x="522" y="773" text-anchor="middle" class="s">is a 30% risk really 30%?</text>
+
+  <rect x="638" y="734" width="200" height="50" rx="6" class="chip"/>
+  <text x="738" y="755" text-anchor="middle" class="sb">Daily error spread</text>
+  <text x="738" y="773" text-anchor="middle" class="s">gives realistic ranges</text>
+
+  <rect x="854" y="734" width="200" height="50" rx="6" class="chip"/>
+  <text x="954" y="755" text-anchor="middle" class="sb">Cost of each mistake</text>
+  <text x="954" y="773" text-anchor="middle" class="s">sets the decision threshold</text>
+
+  <path d="M630,798 L630,828" class="flow"/>
+  <text x="646" y="818" class="s">best models saved to a file</text>
+
+  <!-- 6 App -->
+  <rect x="190" y="832" width="880" height="190" rx="8" class="acc"/>
+  <text x="630" y="860" text-anchor="middle" class="h">Streamlit data app</text>
+
+  <rect x="206" y="874" width="416" height="132" rx="6" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
+  <text x="222" y="902" class="h">“New booking” screen</text>
+  <rect x="506" y="886" width="100" height="22" rx="11" class="tag"/>
+  <text x="556" y="901" text-anchor="middle" class="tagt">uses Model A</text>
+  <line x1="222" y1="916" x2="606" y2="916" class="rule"/>
+  <text x="222" y="940" class="p">Risk level, with the reasons behind it</text>
+  <text x="222" y="964" class="p">Suggested action: a reminder email, or</text>
+  <text x="222" y="984" class="p">offering a non-refundable rate</text>
+
+  <rect x="638" y="874" width="416" height="132" rx="6" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
+  <text x="654" y="902" class="h">“Tomorrow” screen</text>
+  <rect x="938" y="886" width="100" height="22" rx="11" class="tag"/>
+  <text x="988" y="901" text-anchor="middle" class="tagt">uses Model B</text>
+  <line x1="654" y1="916" x2="1038" y2="916" class="rule"/>
+  <text x="654" y="940" class="p">Expected no-shows, shown as a range</text>
+  <text x="654" y="962" class="p">Suggested number of extra rooms to sell</text>
+  <text x="654" y="984" class="p">Sliders: hotel size, cost of moving a guest</text>
+
+  <path d="M630,1022 L630,1052" class="flow"/>
+
+  <!-- 7 Decision -->
+  <rect x="190" y="1056" width="880" height="64" rx="8" fill="#0F172A"/>
+  <text x="630" y="1084" text-anchor="middle" font-size="15" font-weight="700" fill="#FFFFFF">The hotel manager makes the final decision</text>
+  <text x="630" y="1105" text-anchor="middle" font-size="13" fill="#CBD5E1">The app only recommends. No guest is ever refused.</text>
+</svg>
