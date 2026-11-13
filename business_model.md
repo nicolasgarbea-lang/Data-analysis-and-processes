@@ -6,7 +6,7 @@
 
 ## 1. The idea in one sentence
 
-A decision-support tool that predicts which hotel bookings will be cancelled, so the manager can protect revenue in two ways: by setting the right booking policy (deposit, card guarantee, cancellation deadline) when a booking comes in, and by deciding how many last-minute bookings to accept 7 days before arrival even when the hotel looks full.
+A decision-support tool that predicts which hotel bookings will be cancelled, so the manager can protect revenue in two ways: by setting the right booking policy (deposit, card guarantee, cancellation deadline) when a booking comes in, and by deciding how many last-minute bookings to accept 3 days before arrival even when the hotel looks full. The tool is **open and configurable**: any hotel types in its own capacity, prices and costs, and gets recommendations for its own situation.
 
 ## 2. The problem
 
@@ -50,12 +50,12 @@ Booking conditions (deposit, deadline, refundable or not) are also usually the s
 ## 4. How the product works (overview)
 
 ```
-                    MODEL A (at booking time)                       MODEL B (7 days before arrival)
+                    MODEL A (at booking time)                       MODEL B (3 days before arrival)
 New booking ──► cancellation probability ──► policy rules ──► deposit, card guarantee,
                                                                cancellation deadline
                                                                         │
                                                                         ▼
-Bookings still active 7 days before ──► probability each one cancels ──► expected free rooms (range)
+Bookings still active 3 days before ──► probability each one cancels ──► expected free rooms (range)
 Manager enters: rooms, last-minute requests, costs ──────────────────────► how many requests to accept,
                                                                             who to ask for reconfirmation
 ```
@@ -96,7 +96,7 @@ The tool turns the probability into a concrete policy. Three things are set:
 
 The cut-offs (25% and 60%) are starting values. How we set the final ones is explained further down.
 
-**Why the deadlines are 7 and 14 days:** a cancellation that comes 7 or more days before arrival arrives before Model B's decision (section 6), so the room can still be sold to someone else. A cancellation the evening before is almost impossible to resell.
+**Why the deadlines are 7 and 14 days:** a cancellation that comes 7 or more days before arrival is known long before Model B's decision (section 6, 3 days before arrival), so the room can still be sold to someone else. Cancellations in the last 3 days are exactly what Model B has to estimate. All deadlines are settings the hotel can change (section 5b).
 
 ### The deposit is adjusted to the amount at stake
 
@@ -139,11 +139,45 @@ In this dataset, bookings that were already non-refundable are said to cancel ve
 
 The model learns from the past, when these hotels had their old policies. If the hotel starts asking for deposits, guests will behave differently, and the model will need retraining on the new data after some months.
 
-## 6. Model B: managing the rooms 7 days before arrival
+## 5b. Configurable settings (nothing hard coded)
+
+The tool is meant to be **open and reusable**. The team's two hotels are only the example. Any hotel types in its own numbers, presses a button and waits for the answer. Everything below is a setting with a default, and the defaults are what we use in our own evaluation.
+
+| Group | Setting | Default | Used by |
+|---|---|---|---|
+| **Hotel** | Total number of rooms (per room type, optional) | estimated from the data *(to define)* | Model B |
+| | Rooms still free on paper for the night | 0 | Model B |
+| | Last-minute requests waiting, and their price | entered per night | Model B |
+| **Prices and costs** | Price per night (average, or per room type) | taken from each booking | Both |
+| | Cost of an empty room | 1 × price of the night | Model B |
+| | Cost of moving a guest | 2 × price of the night | Model B |
+| | Currency | euro | Both |
+| **Horizon** | Days before arrival for Model B | 3 | Model B |
+| **Risk levels** | Cut-offs between low, medium and high | 25% and 60% | Model A |
+| | Accepted share of "high" bookings (optional) | none | Model A |
+| **Policy** | Deposit per level, card guarantee yes/no, free cancellation deadline, reconfirmation days | table in section 5 | Model A |
+| | Maximum deposit | 50% of the stay | Model A |
+| **Safety** | Overbooking confidence (the 67% in section 6) | calculated from the two costs, can be overridden | Model B |
+
+**How the user works with it:**
+1. Type in or upload the settings (a form in the app, or a small config file).
+2. Optionally upload the hotel's own booking history, so the model can be retrained for that hotel. Without it, the tool uses the model trained on our dataset.
+3. Enter a booking (Model A) or a night (Model B), and wait for the answer.
+4. Change a setting and see how the answer changes (for example a different cost of moving a guest).
+
+**What this means for the project:**
+- Settings live in **one config file** (for example `config.yaml`) and in the app's side bar. The model code reads from there and never contains a fixed number.
+- The probabilities come from the trained model. The recommendations (policy, number of extra guests) are calculated from the settings, so changing a setting needs **no retraining**.
+- Only the horizon (3 days) changes what the model has to learn. Changing it means retraining Model B, so the app offers a few fixed choices (for example 1, 3, 7 days) trained in advance.
+- The code is published open source on GitHub, with a short guide on how to add your own hotel *(to define: licence)*.
+
+**A limit to state clearly:** the model learned from two Portuguese hotels from 2015 to 2017. For another hotel, the probabilities are only trustworthy after retraining on that hotel's own bookings. The app says so.
+
+## 6. Model B: managing the rooms 3 days before arrival
 
 ### The situation
 
-It's Saturday the 3rd. The manager looks at **Saturday the 10th**. On paper the hotel is full: all 200 rooms are booked. But the phone keeps ringing and the website keeps getting requests: 20 people want a room for that night at the last minute.
+It's Wednesday the 7th. The manager looks at **Saturday the 10th**. On paper the hotel is full: all 200 rooms are booked. But the phone keeps ringing and the website keeps getting requests: 20 people want a room for that night at the last minute.
 
 The question: **how many of these 20 should we accept?** Accept none, and we probably end up with empty rooms. Accept all 20, and we may have to send guests away on the night.
 
@@ -151,7 +185,7 @@ The question: **how many of these 20 should we accept?** Accept none, and we pro
 
 From the booking system (in our project: from the dataset):
 - every booking still active for that night, with the same features as Model A
-- the number of days left (always 7)
+- the number of days left (a setting, default 3)
 
 Entered by the manager:
 - **total number of rooms** in the hotel
@@ -161,7 +195,7 @@ Entered by the manager:
 
 ### What the model gives
 
-For **each** booking still active: the probability that it is cancelled in the last 7 days or turns into a no-show.
+For **each** booking still active: the probability that it is cancelled in the last 3 days or turns into a no-show.
 
 Adding these up gives the **expected number of rooms that will free up**, for example 18. But the tool shows a **range** (for example 11 to 25), because cancellations come in waves. The range comes from how much our predictions were off on real days in the past.
 
@@ -197,7 +231,7 @@ If more guests arrive than there are rooms, the manager needs to be ready. The t
 
 ### How we test this with our data
 
-The dataset has no "requests waiting" column, but it does contain bookings made less than 7 days before arrival. We treat those as the **last-minute demand** for each night in 2017, and replay the year (section 8).
+The dataset has no "requests waiting" column, but it does contain bookings made less than 3 days before arrival (about 10% of all bookings, of which only about 8% are cancelled). We treat those as the **last-minute demand** for each night in 2017, and replay the year (section 8).
 
 ## 7. Costs
 
@@ -237,7 +271,7 @@ The difference between the scenarios is the headline of the presentation, for ex
 
 **Things we must assume for this simulation:**
 - The dataset doesn't say how many rooms each hotel has. We can estimate it from the busiest night in the data *(to define)*.
-- We use the bookings made less than 7 days before arrival as the last-minute demand.
+- We use the bookings made less than 3 days before arrival as the last-minute demand.
 
 Model A is harder to put in euros, because we don't know how guests would react to a deposit. For Model A we show what share of all 2017 cancellations falls into the "high" group, and how much money those bookings represented.
 
@@ -260,7 +294,7 @@ Model A is harder to put in euros, because we don't know how guests would react 
 
 ## 11. How it is delivered
 
-- A Streamlit web app with two screens: **"New booking"** (Model A, booking policy) and **"Next week"** (Model B, last-minute requests)
+- A Streamlit web app with two screens: **"New booking"** (Model A, booking policy) and **"Last minute"** (Model B, last-minute requests)
 - Models trained on 2015 and 2016 and tested on 2017, saved and loaded by the app
 - In a real product: a connection to the hotel's booking system (PMS) and regular retraining *(out of scope for the course, but worth mentioning)*
 
@@ -287,7 +321,8 @@ Model A is harder to put in euros, because we don't know how guests would react 
 |---|---|
 | Cost of an empty room = price of the night | It's the money lost, and it's in the data |
 | Cost of moving a guest = 2 × price of the night (assumption, adjustable) | Covers the other hotel, transport and compensation |
-| Model B predicts 7 days before arrival | Matches the "last week" figure in the proposal |
+| Model B predicts 3 days before arrival (changed from 7) | Late bookings are the real overbooking window. The horizon is a setting. |
+| The tool is configurable: the hotel enters its own capacity, prices and costs | Works for any hotel, nothing hard coded (section 5b) |
 | One model for both hotels, with hotel type as an input | More data for training; the input lets the model treat the hotels differently |
 | Three risk levels: below 25%, 25% to 60%, above 60% (starting values) | Tuned later on 2016 data |
 | Model A sets deposit, card guarantee and cancellation deadline through visible rules | The model predicts, the rules decide, the manager can see and change both |
@@ -304,3 +339,4 @@ Model A is harder to put in euros, because we don't know how guests would react 
 6. **Which extra data we add:** holidays, events, exchange rates, or none.
 7. **Revenue model**, if the presentation needs one.
 8. **Who the main user is:** the revenue manager, the front desk, or both.
+9. **Open-source details:** which licence, and a config file, a form, or both?

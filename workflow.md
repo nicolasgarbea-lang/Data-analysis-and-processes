@@ -42,7 +42,7 @@ Each step builds on the one before it. A step is finished when its "Done when" l
 
 | | Model A | Model B |
 |---|---|---|
-| **When** | At booking time | 7 days before arrival |
+| **When** | At booking time | 3 days before arrival |
 | **Question** | How likely is this booking to be cancelled? | Among guests still booked, who will cancel at the last minute or not show up? |
 | **Decision** | Which booking conditions to offer | How many extra rooms to sell |
 
@@ -67,6 +67,7 @@ Each step builds on the one before it. A step is finished when its "Done when" l
 - Built with Streamlit, like the app from Lecture 5. The trained models are saved to `models/` and loaded by the app.
 - **"New booking" screen (Model A):** the manager enters a booking and sees the risk level, the reasons behind it and a suggested action (a reminder email, or offering a non-refundable rate).
 - **"Tomorrow" screen (Model B):** shows the expected number of no-shows as a range and suggests how many extra rooms to sell. Sliders set the hotel's size and the cost of moving a guest.
+- **Nothing is hard coded.** Hotel capacity, prices, costs, risk cut-offs and policies are entered in the app or in `config.yaml`. The models give probabilities, and the recommendations are calculated from the settings, so changing a setting needs no retraining.
 - The app only recommends. No guest is ever refused, and the manager makes the final decision.
 - **Output:** `app/app.py`
 - **Done when:** someone outside the team can use both screens without an explanation.
@@ -87,6 +88,7 @@ grouproject/
 ├── notebooks/      one notebook per pipeline step (01 to 05)
 ├── models/         saved models for the app
 ├── app/            Streamlit app
+├── config.yaml     default settings: rooms, prices, costs, cut-offs, horizon
 ├── requirements.txt
 └── workflow.md     this file
 ```
@@ -129,7 +131,8 @@ grouproject/
 | Never refuse a guest, only soft actions | An 80% risk still means 1 in 5 of those guests would have come. |
 | Show ranges for overbooking, based on the measured daily spread | Cancellations happen together, so a single number hides the risk. |
 | The manager always decides | The model can't know about one-off events. |
-| Model B predicts 7 days before arrival | Matches the "last week" figure in the proposal. |
+| Model B predicts 3 days before arrival (was 7) | Late bookings are the real overbooking window. The horizon is a setting. |
+| Settings (rooms, prices, costs, cut-offs) are entered by the user, never hard coded | The tool should work for any hotel. See `business_model.md`. |
 | One model for both hotels, with hotel type as an input | More training data, and the model can still treat the hotels differently. |
 | Empty room = price of the night; moving a guest = 2 × price (assumption) | Sets the overbooking rule. Details in `business_model.md`. |
 
