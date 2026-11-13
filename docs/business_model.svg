@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 1200" width="1100" height="1200" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">Hotel cancellation prediction: business model</title>
+  <desc id="d">The problem, the two models (booking policy at booking time, last-minute requests 7 days before arrival), the manager's guardrails, the value for the hotel and the business model canvas.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748B"/>
+    </marker>
+    <style>
+      .title { font-size: 22px; font-weight: 700; fill: #0F172A; }
+      .sub   { font-size: 13px; fill: #475569; }
+      .sec   { font-size: 12px; font-weight: 700; fill: #1D4ED8; letter-spacing: 1px; }
+      .h     { font-size: 15px; font-weight: 700; fill: #0F172A; }
+      .p     { font-size: 13px; fill: #334155; }
+      .s     { font-size: 12px; fill: #475569; }
+      .sb    { font-size: 12px; font-weight: 700; fill: #0F172A; }
+      .box   { fill: #FFFFFF; stroke: #CBD5E1; stroke-width: 1.5; }
+      .opt   { fill: #FFFFFF; stroke: #94A3B8; stroke-width: 1.5; stroke-dasharray: 6 5; }
+      .chip  { fill: #F1F5F9; stroke: none; }
+      .acc   { fill: #EFF6FF; stroke: #60A5FA; stroke-width: 1.5; }
+      .warn  { fill: #FEF2F2; stroke: #FCA5A5; stroke-width: 1.5; }
+      .good  { fill: #F0FDF4; stroke: #86EFAC; stroke-width: 1.5; }
+      .tag   { fill: #1D4ED8; }
+      .tagt  { font-size: 11px; font-weight: 700; fill: #FFFFFF; }
+      .flow  { stroke: #64748B; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+      .rule  { stroke: #E2E8F0; stroke-width: 1; }
+      .lo    { font-size: 12px; font-weight: 700; fill: #15803D; }
+      .me    { font-size: 12px; font-weight: 700; fill: #B45309; }
+      .hi    { font-size: 12px; font-weight: 700; fill: #B91C1C; }
+    </style>
+  </defs>
+
+  <rect width="1100" height="1200" fill="#FFFFFF"/>
+
+  <text x="30" y="38" class="title">Predicting hotel cancellations: business model</text>
+  <text x="30" y="60" class="sub">What goes in, what the tool suggests, and why it protects the hotel's revenue</text>
+
+  <!-- ===== THE PROBLEM ===== -->
+  <rect x="30" y="80" width="1040" height="110" rx="10" class="warn"/>
+  <text x="50" y="104" class="sec">THE PROBLEM</text>
+
+  <text x="50" y="132" class="h">Rooms are perishable</text>
+  <text x="50" y="153" class="p">An empty room tonight can never be</text>
+  <text x="50" y="172" class="p">sold again. The number of rooms is fixed.</text>
+
+  <line x1="380" y1="118" x2="380" y2="176" class="rule"/>
+  <text x="400" y="132" class="h">Many bookings are cancelled</text>
+  <text x="400" y="153" class="p">City hotel about 42%, resort about 28%,</text>
+  <text x="400" y="172" class="p">often for free or as a no-show.</text>
+
+  <line x1="730" y1="118" x2="730" y2="176" class="rule"/>
+  <text x="750" y="132" class="h">Overbooking by gut feeling</text>
+  <text x="750" y="153" class="p">Too little: rooms stay empty.</text>
+  <text x="750" y="172" class="p">Too much: guests are moved elsewhere.</text>
+
+  <path d="M275,190 L275,214" class="flow"/>
+  <path d="M825,190 L825,214" class="flow"/>
+
+  <!-- ===== COLUMN HEADERS ===== -->
+  <rect x="30" y="220" width="82" height="24" rx="12" class="tag"/>
+  <text x="71" y="236" text-anchor="middle" class="tagt">MODEL A</text>
+  <text x="124" y="237" class="h">At booking time: which booking policy?</text>
+
+  <rect x="580" y="220" width="82" height="24" rx="12" class="tag"/>
+  <text x="621" y="236" text-anchor="middle" class="tagt">MODEL B</text>
+  <text x="674" y="237" class="h">7 days before: how many extra guests?</text>
+
+  <!-- ===== MODEL A ===== -->
+  <!-- Inputs -->
+  <rect x="30" y="260" width="490" height="126" rx="8" class="box"/>
+  <text x="48" y="286" class="h">Inputs: the new booking</text>
+  <text x="48" y="310" class="p">Lead time, arrival date, length of stay, guests</text>
+  <text x="48" y="330" class="p">Price, deposit type, meal plan, room type</text>
+  <text x="48" y="350" class="p">Booking channel, market segment, guest history</text>
+  <text x="48" y="370" class="p">How full the hotel already is for that date</text>
+  <path d="M275,386 L275,406" class="flow"/>
+
+  <!-- ML -->
+  <rect x="30" y="408" width="490" height="82" rx="8" class="acc"/>
+  <text x="48" y="434" class="h">Machine learning model</text>
+  <text x="48" y="458" class="p">Probability that this booking is cancelled (e.g. 47%)</text>
+  <text x="48" y="478" class="p">plus the main reasons behind it</text>
+  <path d="M275,490 L275,510" class="flow"/>
+
+  <!-- Rules -->
+  <rect x="30" y="512" width="490" height="136" rx="8" class="box"/>
+  <text x="48" y="538" class="h">Policy rules (visible, adjustable)</text>
+  <text x="48" y="562" class="p">Risk level:</text>
+  <text x="120" y="562" class="lo">low &lt; 25%</text>
+  <text x="200" y="562" class="me">medium 25–60%</text>
+  <text x="312" y="562" class="hi">high &gt; 60%</text>
+  <text x="48" y="582" class="p">Amount at stake = probability × price of the whole stay</text>
+  <rect x="48" y="596" width="454" height="40" rx="6" class="opt"/>
+  <text x="62" y="613" class="sb">Optional, to decide:</text>
+  <text x="62" y="629" class="s">lighter deposit for guests paying in a weaker currency</text>
+  <path d="M275,648 L275,668" class="flow"/>
+
+  <!-- Outputs -->
+  <rect x="30" y="670" width="490" height="140" rx="8" class="good"/>
+  <text x="48" y="696" class="h">Suggested booking policy</text>
+  <text x="250" y="720" class="lo">Low</text>
+  <text x="335" y="720" class="me">Medium</text>
+  <text x="430" y="720" class="hi">High</text>
+  <line x1="48" y1="728" x2="502" y2="728" class="rule"/>
+  <text x="48" y="746" class="p">Card guarantee</text>
+  <text x="250" y="746" class="p">No</text>
+  <text x="335" y="746" class="p">Yes</text>
+  <text x="430" y="746" class="p">Yes</text>
+  <text x="48" y="770" class="p">Deposit</text>
+  <text x="250" y="770" class="p">None</text>
+  <text x="335" y="770" class="p">First night</text>
+  <text x="430" y="770" class="p">30–50%</text>
+  <text x="48" y="794" class="p">Free cancellation until</text>
+  <text x="250" y="794" class="p">1 day</text>
+  <text x="335" y="794" class="p">7 days</text>
+  <text x="430" y="794" class="p">14 days</text>
+
+  <!-- ===== MODEL B ===== -->
+  <!-- Inputs -->
+  <rect x="580" y="260" width="490" height="126" rx="8" class="box"/>
+  <text x="598" y="286" class="h">Inputs: that night's bookings + manager</text>
+  <text x="598" y="310" class="p">Every booking still active for the night (same features)</text>
+  <text x="598" y="330" class="p">Manager enters: total rooms, rooms still free (0 if full),</text>
+  <text x="598" y="350" class="p">last-minute requests waiting, cost of moving a guest</text>
+  <text x="598" y="370" class="s">Rooms freed by Model A's 7 and 14 day deadlines show up here</text>
+  <path d="M825,386 L825,406" class="flow"/>
+
+  <!-- ML -->
+  <rect x="580" y="408" width="490" height="82" rx="8" class="acc"/>
+  <text x="598" y="434" class="h">Machine learning model</text>
+  <text x="598" y="458" class="p">Probability that each booking cancels or doesn't show</text>
+  <text x="598" y="478" class="p">Added up: expected free rooms as a range (e.g. 11 to 25)</text>
+  <path d="M825,490 L825,510" class="flow"/>
+
+  <!-- Rules -->
+  <rect x="580" y="512" width="490" height="136" rx="8" class="box"/>
+  <text x="598" y="538" class="h">Overbooking rule (newsvendor model)</text>
+  <text x="598" y="562" class="p">Accept one more request only if we are at least</text>
+  <text x="598" y="582" class="p"><tspan font-weight="700" fill="#0F172A">67% sure</tspan> that a room will free up for it.</text>
+  <text x="598" y="606" class="s">67% = cost of moving ÷ (cost of moving + cost of empty room)</text>
+  <text x="598" y="626" class="s">with moving a guest = 2 × night price, empty room = 1 × night price</text>
+  <path d="M825,648 L825,668" class="flow"/>
+
+  <!-- Outputs -->
+  <rect x="580" y="670" width="490" height="140" rx="8" class="good"/>
+  <text x="598" y="696" class="h">Suggestions for that night</text>
+  <text x="598" y="722" class="p">• Accept <tspan font-weight="700" fill="#0F172A">15 of the 20</tspan> last-minute requests</text>
+  <text x="598" y="746" class="p">• Show the trade-off: expected empty rooms vs. guests moved</text>
+  <text x="598" y="770" class="p">• Ask the riskiest bookings to reconfirm their stay</text>
+  <text x="598" y="794" class="p">• Bad-night checklist: partner hotel, taxi, who moves first</text>
+
+  <!-- ===== MANAGER ===== -->
+  <path d="M275,810 L275,838" class="flow"/>
+  <path d="M825,810 L825,838" class="flow"/>
+  <rect x="30" y="840" width="1040" height="100" rx="10" class="box"/>
+  <text x="50" y="866" class="sec">THE MANAGER DECIDES</text>
+
+  <rect x="50" y="880" width="318" height="46" rx="6" class="chip"/>
+  <text x="64" y="899" class="sb">The tool only recommends</text>
+  <text x="64" y="916" class="s">No guest is ever refused</text>
+
+  <rect x="391" y="880" width="318" height="46" rx="6" class="chip"/>
+  <text x="405" y="899" class="sb">Confirmed guests are never moved</text>
+  <text x="405" y="916" class="s">because of a prediction: 90% risk is not 100%</text>
+
+  <rect x="732" y="880" width="318" height="46" rx="6" class="chip"/>
+  <text x="746" y="899" class="sb">Ranges, not single numbers</text>
+  <text x="746" y="916" class="s">Cancellations come in waves</text>
+
+  <path d="M550,940 L550,960" class="flow"/>
+
+  <!-- ===== VALUE ===== -->
+  <rect x="30" y="962" width="1040" height="92" rx="10" class="acc"/>
+  <text x="50" y="988" class="sec">VALUE FOR THE HOTEL</text>
+  <text x="50" y="1016" class="h">Fewer empty rooms</text>
+  <text x="50" y="1036" class="s">More revenue from the same rooms</text>
+  <text x="310" y="1016" class="h">Fewer moved guests</text>
+  <text x="310" y="1036" class="s">Overbooking based on measured risk</text>
+  <text x="570" y="1016" class="h">Fairer conditions</text>
+  <text x="570" y="1036" class="s">Only risky bookings get stricter terms</text>
+  <text x="830" y="1016" class="h">€ saved in 2017</text>
+  <text x="830" y="1036" class="s">Replay vs. no or flat overbooking</text>
+
+  <!-- ===== CANVAS STRIP ===== -->
+  <text x="30" y="1090" class="sec">BUSINESS MODEL</text>
+  <rect x="30" y="1102" width="250" height="72" rx="8" class="box"/>
+  <text x="46" y="1125" class="sb">Customer</text>
+  <text x="46" y="1144" class="s">Revenue managers of mid-sized</text>
+  <text x="46" y="1161" class="s">independent hotels</text>
+
+  <rect x="293" y="1102" width="250" height="72" rx="8" class="box"/>
+  <text x="309" y="1125" class="sb">Channel</text>
+  <text x="309" y="1144" class="s">Streamlit web app; later linked</text>
+  <text x="309" y="1161" class="s">to the hotel's booking system</text>
+
+  <rect x="556" y="1102" width="250" height="72" rx="8" class="opt"/>
+  <text x="572" y="1125" class="sb">Revenue model (to define)</text>
+  <text x="572" y="1144" class="s">Monthly subscription per hotel</text>
+  <text x="572" y="1161" class="s">or per room</text>
+
+  <rect x="820" y="1102" width="250" height="72" rx="8" class="box"/>
+  <text x="836" y="1125" class="sb">Costs</text>
+  <text x="836" y="1144" class="s">Data integration, retraining,</text>
+  <text x="836" y="1161" class="s">hosting</text>
+</svg>
