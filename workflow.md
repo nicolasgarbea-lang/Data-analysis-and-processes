@@ -66,7 +66,7 @@ Each step builds on the one before it. A step is finished when its "Done when" l
 
 - Built with Streamlit, like the app from Lecture 5. The trained models are saved to `models/` and loaded by the app.
 - **"New booking" screen (Model A):** the manager enters a booking and sees the risk level, the reasons behind it and a suggested action (a reminder email, or offering a non-refundable rate).
-- **"Tomorrow" screen (Model B):** shows the expected number of no-shows as a range and suggests how many extra rooms to sell. Sliders set the hotel's size and the cost of moving a guest.
+- **"Tomorrow" screen (Model B):** shows the expected number of no-shows as a range and suggests how many extra rooms to sell. The user enters the hotel's size and a fallback plan for an overbooked night (price at a nearby hotel, taxi, compensation).
 - **Nothing is hard coded.** Hotel capacity, prices, costs, risk cut-offs and policies are entered in the app or in `config.yaml`. The models give probabilities, and the recommendations are calculated from the settings, so changing a setting needs no retraining.
 - The app only recommends. No guest is ever refused, and the manager makes the final decision.
 - **Output:** `app/app.py`
@@ -134,11 +134,11 @@ grouproject/
 | Model B predicts 3 days before arrival (was 7) | Late bookings are the real overbooking window. The horizon is a setting. |
 | Settings (rooms, prices, costs, cut-offs) are entered by the user, never hard coded | The tool should work for any hotel. See `business_model.md`. |
 | One model for both hotels, with hotel type as an input | More training data, and the model can still treat the hotels differently. |
-| Empty room = price of the night; moving a guest = 2 × price (assumption) | Sets the overbooking rule. Details in `business_model.md`. |
+| Empty room = price of the night; moving a guest = the user's fallback plan (nearby hotel price + taxi + compensation), default 2 × price | Sets the overbooking rule. Details in `business_model.md`. |
 
 ## Open questions
 
 - Which extra data do we add: holidays, events, exchange rate, or none?
-- A source for the "2 × price" cost of moving a guest, or we keep it as a stated assumption.
+- A source for the default fallback costs (2 × price of the night), or we keep them as a stated assumption.
 - How many rooms does each hotel have? Needed to simulate 2017.
 - Who does what, and what are the deadlines? (Fill in the two tables above.)

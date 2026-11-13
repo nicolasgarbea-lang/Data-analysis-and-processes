@@ -150,7 +150,8 @@ The tool is meant to be **open and reusable**. The team's two hotels are only th
 | | Last-minute requests waiting, and their price | entered per night | Model B |
 | **Prices and costs** | Price per night (average, or per room type) | taken from each booking | Both |
 | | Cost of an empty room | 1 × price of the night | Model B |
-| | Cost of moving a guest | 2 × price of the night | Model B |
+| | **Fallback plan** (what happens if the hotel is overbooked): price per night at the nearby hotel, taxi cost, compensation per guest | defaults: nearby hotel = 1.3 × own price, taxi and compensation = 0.7 × own price *(assumptions)* | Model B |
+| | Cost of moving a guest | calculated from the fallback plan (see section 7); if left empty, 2 × price of the night | Model B |
 | | Currency | euro | Both |
 | **Horizon** | Days before arrival for Model B | 3 | Model B |
 | **Risk levels** | Cut-offs between low, medium and high | 25% and 60% | Model A |
@@ -191,7 +192,7 @@ Entered by the manager:
 - **total number of rooms** in the hotel
 - **rooms still free on paper** (0 if the hotel is fully booked)
 - **number of last-minute requests** waiting for that night, and their average price
-- **cost of moving a guest** (slider, default 2 × the price of the night)
+- **the fallback plan:** the price of a room at the nearby hotel(s), the taxi cost and the compensation per guest. The manager knows these prices, and they are what makes the overbooking rule fit this hotel (section 7)
 
 ### What the model gives
 
@@ -223,7 +224,7 @@ The bookings with the highest probability of not coming get a friendly message: 
 
 **3. A plan for the bad night**
 
-If more guests arrive than there are rooms, the manager needs to be ready. The tool doesn't decide this, but the app shows a short checklist: a partner hotel nearby with an agreed price, a taxi budget, and which guest to move first (usually a one-night stay, not a repeat guest, not a family with children).
+If more guests arrive than there are rooms, the manager needs to be ready. The tool doesn't decide this, but the app shows the **fallback plan the manager entered**: which nearby hotel, at what price, how many rooms it has, the taxi budget, and which guest to move first (usually a one-night stay, not a repeat guest, not a family with children). If the manager listed several nearby hotels, the tool uses the cheapest ones first and shows how the cost rises when it runs out of cheap rooms.
 
 ### What we do NOT do
 
@@ -243,15 +244,28 @@ Simplifications we accept and mention in the limits:
 - An empty room also saves a little money (no cleaning, no breakfast), so the true loss is slightly lower than the price.
 - If the guest paid a deposit that the hotel keeps, the loss is lower too.
 
-### Cost of moving a guest to another hotel
+### Cost of moving a guest: the fallback plan
 
-The hotel pays:
-- the room at the other hotel, which is often more expensive because it's a busy night
-- transport to the other hotel (a taxi)
-- often a small compensation (a voucher, a free night later)
-- the risk that this guest never comes back and writes a bad review
+The cost of moving a guest isn't a fixed number. It depends on **what the hotel does when it is overbooked**, and only the hotel knows that. So the user enters the **fallback plan** as settings:
 
-**Our assumption:** moving a guest costs **2 times the price of the night**. The dataset doesn't contain this number, so it's an assumption. In the app it is a slider (from 1× to 4×), and in the evaluation we show how the recommendation changes with it. *(We'd like a source for the 2×. A revenue-management textbook or a hotel's walking policy would do.)*
+| Fallback setting | Example | Note |
+|---|---|---|
+| **Nearby hotel(s)** | Hotel X, 4 minutes away | The tool can hold several, in order of preference |
+| **Price per night at that hotel** | €150 | Higher on busy nights. The user can enter a price per night or a mark-up on the own price |
+| **Rooms it can take** | 5 | After that, the next hotel on the list is used |
+| **Transport per guest** | €20 | Taxi |
+| **Compensation per guest** | €50 | Voucher, free breakfast, or a free night later. Can be 0 |
+| **Goodwill cost** *(optional)* | €0 | A number for the lost goodwill and bad reviews, if the hotel wants to count it |
+
+> Cost of moving one guest = nearby hotel price + transport + compensation + goodwill
+
+With the example numbers: 150 + 20 + 50 + 0 = **€220**. For a room that sells at €120, that's 1.8 times the price of the night.
+
+**Why only these costs count:** if the hotel accepts an extra booking and then has to move that guest, it earns nothing from that booking either way, since the guest is refunded. The extra loss compared with never accepting is only what the fallback costs. Meanwhile, an empty room loses the price of the night. This is why the overbooking rule in section 6 compares just these two numbers.
+
+**If the user enters nothing**, the tool uses the default of **2 times the price of the night**, so it still works out of the box. The dataset doesn't contain these costs, so the default is an assumption, and the app marks results based on it with a note. In the evaluation we show how the recommendation changes with the fallback costs (from 1× to 4× the price of the night).
+
+**A guard on top:** the tool never suggests a plan that depends on more rooms at the nearby hotel than the user said it has. If more requests would need a fallback than the fallback can take, the suggestion is reduced to that number.
 
 ## 8. How we show the value in euros
 
@@ -265,7 +279,7 @@ A hotel manager doesn't care about "precision" or "recall". They want to know ho
 
 For each scenario we add up:
 - **lost money from empty rooms** = number of empty rooms × price of the night
-- **cost of moved guests** = number of moved guests × 2 × price of the night
+- **cost of moved guests** = number of moved guests × the fallback cost (default 2 × price of the night). Our dataset has no fallback prices, so for the replay we use the default and show a range of fallback costs
 
 The difference between the scenarios is the headline of the presentation, for example: *"In 2017, our tool would have saved the city hotel about € X compared with no overbooking."*
 
@@ -320,7 +334,7 @@ Model A is harder to put in euros, because we don't know how guests would react 
 | Decision | Reason |
 |---|---|
 | Cost of an empty room = price of the night | It's the money lost, and it's in the data |
-| Cost of moving a guest = 2 × price of the night (assumption, adjustable) | Covers the other hotel, transport and compensation |
+| Cost of moving a guest comes from a **fallback plan the user enters** (nearby hotel price, transport, compensation); default 2 × price of the night | The hotel knows its nearby prices, so the rule fits each hotel |
 | Model B predicts 3 days before arrival (changed from 7) | Late bookings are the real overbooking window. The horizon is a setting. |
 | The tool is configurable: the hotel enters its own capacity, prices and costs | Works for any hotel, nothing hard coded (section 5b) |
 | One model for both hotels, with hotel type as an input | More data for training; the input lets the model treat the hotels differently |
@@ -332,7 +346,7 @@ Model A is harder to put in euros, because we don't know how guests would react 
 ### Still open
 
 1. **Do we adjust the deposit by the guest's currency or country?** Options: by nationality (legally risky), by payment currency and only downward, instalments for everyone paying in a foreign currency, or not at all.
-2. **A source for the "2 × price" cost of moving a guest**, or we keep it as a stated assumption.
+2. **A source for the default fallback costs** (the 2 × price of the night, the 1.3 and 0.7 defaults), or we keep them as stated assumptions.
 3. **The number of rooms per hotel**, needed for the 2017 simulation.
 4. **Do non-refundable bookings really cancel so often in the data?** This decides whether "non-refundable rate" is a good action.
 5. **How big the "high" group may be** (15% to 25% of bookings?).
