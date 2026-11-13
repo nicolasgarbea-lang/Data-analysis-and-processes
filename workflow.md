@@ -42,7 +42,7 @@ Each step builds on the one before it. A step is finished when its "Done when" l
 
 | | Model A | Model B |
 |---|---|---|
-| **When** | At booking time | A few days before arrival |
+| **When** | At booking time | 7 days before arrival |
 | **Question** | How likely is this booking to be cancelled? | Among guests still booked, who will cancel at the last minute or not show up? |
 | **Decision** | Which booking conditions to offer | How many extra rooms to sell |
 
@@ -129,11 +129,13 @@ grouproject/
 | Never refuse a guest, only soft actions | An 80% risk still means 1 in 5 of those guests would have come. |
 | Show ranges for overbooking, based on the measured daily spread | Cancellations happen together, so a single number hides the risk. |
 | The manager always decides | The model can't know about one-off events. |
+| Model B predicts 7 days before arrival | Matches the "last week" figure in the proposal. |
+| One model for both hotels, with hotel type as an input | More training data, and the model can still treat the hotels differently. |
+| Empty room = price of the night; moving a guest = 2 × price (assumption) | Sets the overbooking rule. Details in `business_model.md`. |
 
 ## Open questions
 
-- How many days before arrival does Model B predict? (7 days would match the "last week" figure in the proposal.)
 - Which extra data do we add: holidays, events, exchange rate, or none?
-- What do an empty room and moving a guest to another hotel cost? We need numbers, or sources for them, for the threshold.
-- One model for both hotels, or one per hotel? The city hotel cancels much more often (about 42%) than the resort hotel (about 28%).
+- A source for the "2 × price" cost of moving a guest, or we keep it as a stated assumption.
+- How many rooms does each hotel have? Needed to simulate 2017.
 - Who does what, and what are the deadlines? (Fill in the two tables above.)
