@@ -1,0 +1,55 @@
+# Central settings. Every script reads this file via src.config.load_config().
+timezone: Europe/Zurich
+
+auction:
+  gate_closure_local: "11:00"   # Swiss day-ahead auction (EPEX SPOT, CH). Verified in Phase 1, see docs/assumptions.md
+  forecast_time_local: "10:00"  # gate closure minus 1 hour; nothing published after this on day D may be used
+
+periods:
+  raw_start: "2019-01-01"
+  raw_end: "2026-10-31"
+  train_end: "2026-08-31"
+  val_start: "2026-09-01"
+  val_end: "2026-09-30"
+  test_start: "2026-10-01"
+  test_end: "2026-10-31"
+  # optional second test month (winter); models are retrained on data before it
+  test2_start: "2026-01-01"
+  test2_end: "2026-01-31"
+
+blocks:            # local clock hours, [start, end)
+  - [0, 4]
+  - [4, 8]
+  - [8, 12]
+  - [12, 16]
+  - [16, 20]
+  - [20, 24]
+
+battery:
+  power_mw: 20
+  capacity_mwh: 40
+  soc_min_frac: 0.10
+  soc_max_frac: 0.90
+  soc_start_frac: 0.50
+  round_trip_efficiency: 0.90
+  max_cycles_per_day: 1
+  wear_cost_eur_per_mwh: 5.0     # per MWh discharged
+  allow_sell: false
+
+bidding:
+  charge_limit_factor: 0.9       # limit price = expected discharge price * factor - wear cost
+
+imbalance:
+  shortage_price_factor: 1.2     # missing energy is bought at actual price * 1.2
+  surplus_price_factor: 0.8      # extra energy is sold at actual price * 0.8
+
+paths:
+  raw: data/raw
+  manual: data/manual
+  processed: data/processed
+  features: data/processed/features.parquet
+  models: models
+  reports: reports
+  figures: reports/figures
+
+random_seed: 42
