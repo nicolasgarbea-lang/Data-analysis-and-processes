@@ -1,4 +1,4 @@
-# Day Ahead – Demand and price forecasting for a Swiss DSO
+# Day Ahead – Demand and price forecasting for Zurich's DSO (ewz)
 
 *Business Analytics & Data Science Applications (HSG, HS 2026) · Group project one-pager · v5 (base for team discussion)*
 
@@ -6,7 +6,9 @@
 
 ## 1. The user and the decision
 
-**User:** a Swiss **DSO** (distribution system operator): a municipal or regional utility, such as a Stadtwerk. It sits between the national grid operator (TSO, Swissgrid) and the homes and businesses it supplies. It has to buy the energy its customers will use. It also owns a **grid battery** (default **10 MW / 20 MWh**), so it can store energy and sell it back.
+**User:** **ewz**, the city utility of **Zurich** and its **DSO** (distribution system operator). It sits between the national grid operator (TSO, Swissgrid) and the homes and businesses of Zurich. It has to buy the energy its customers will use. It also owns a **grid battery** (default **10 MW / 20 MWh**), so it can store energy and sell it back.
+
+**Why Switzerland and Zurich:** the day-ahead price is the same for the whole of Switzerland (one Swiss price zone), so the price model is Swiss. Demand is local, so the demand model is for the city of Zurich. Zurich also publishes open data for everything we need: grid load every 15 minutes, weather, EVs, school holidays and events.
 
 **The problem:** the DSO buys its energy on the **day-ahead market**. The auction **closes once a day at 12:00**, and that is when every hour of tomorrow is bought. At that moment the DSO knows neither tomorrow's demand nor tomorrow's price. Demand depends on:
 - **EVs** charging in the evening
@@ -37,7 +39,7 @@ Two targets, one value each for every 4-hour block of tomorrow (6 per day):
 
 | Target | Definition | Candidate source (to check) |
 |---|---|---|
-| **Demand** | Total energy used in the DSO's area in the block (MWh) | Open grid-load data of a Swiss city, e.g. ewz Zurich on opendata.swiss (15-minute steps). Fallback: total Swiss consumption from Swissgrid |
+| **Demand** | Total energy used in the city of Zurich in the block (MWh) | ewz "Bruttolastgang Stadt Zürich" (data.stadt-zuerich.ch, 15-minute steps, 2019 → now). Fallback: total Swiss consumption from Swissgrid |
 | **Price** | Average Swiss day-ahead price of the block (€/MWh) | Energy-Charts API (`bzn=CH`), free |
 
 The auction prices hours (or 15 minutes), not 4-hour blocks. We average to 4-hour blocks to keep the model simple. Going to 24 hourly values later is a small change.
@@ -50,10 +52,10 @@ Everything must be **known on day D before 12:00**.
 |---|---|---|---|
 | **Recent demand** | Demand of today so far, same block yesterday, same block last week | Grid load / smart meters | Demand repeats by day and week |
 | **Recent prices** | Today's day-ahead prices (known since yesterday), same block last week | Energy-Charts | Prices repeat by day and week |
-| **Weather** | Temperature, sunshine, wind for tomorrow | MeteoSwiss open data | Heating in winter, cooling in summer |
+| **Weather** | Temperature, sunshine, wind for tomorrow | MeteoSwiss, station Zürich-Fluntern | Heating in winter, cooling in summer |
 | **Rooftop solar** | Sunshine or solar radiation, solar output in CH | MeteoSwiss, Energy-Charts | Solar on roofs lowers demand from the grid at midday |
-| **EVs** | Number of EVs in the area, public charging-point usage | BFS / ASTRA vehicle data, BFE charging-station data | Evening charging creates new peaks |
-| **Calendar** | 4-hour block, weekday, month, Swiss and cantonal holidays, school holidays | `holidays` package, cantons | Demand pattern |
+| **EVs** | Electric cars in the city of Zurich, charging capacity in Kanton Zürich | Stadt Zürich open data, BFE charging-station data | Evening charging creates new peaks |
+| **Calendar** | 4-hour block, weekday, month, Zurich public holidays, Zurich school holidays | `holidays` package (ZH), Stadt Zürich school holidays | Demand pattern |
 | **Events** | Festivals, big concerts, football matches (e.g. Street Parade, Züri Fäscht) | Our own event list (yes/no flag) | Unusual peaks and drops |
 | **Price drivers** | DE/FR prices, gas and CO₂ prices, reservoir level, EUR/CHF | Energy-Charts, LSEG/Bloomberg at HSG, BFE, SNB | Explain where the Swiss price goes |
 | **Battery (sliders)** | Power (MW), capacity (MWh), efficiency (~85–90%) | User input | Scales the plan and the CHF |
@@ -83,18 +85,17 @@ flowchart TD
 
 ## 6. Questions for the team
 
-1. **Which DSO:** do we use one real city's open grid-load data (e.g. Zurich) or the Swiss total?
-2. **Block size:** keep 4-hour blocks, or forecast all 24 hours of tomorrow?
-3. **Test month:** one month only, or one winter and one summer month to show the seasons?
-4. **Weather:** we use observed weather instead of a forecast, which flatters the model. Is that fine if we say so?
-5. **Events:** how do we build the event list, and for which city?
-6. **Battery:** do we keep it in the decision, or focus only on buying?
+1. **Block size:** keep 4-hour blocks, or forecast all 24 hours of tomorrow?
+2. **Test month:** one month only, or one winter and one summer month to show the seasons?
+3. **Weather:** we use observed weather instead of a forecast, which flatters the model. Is that fine if we say so?
+4. **Events:** who builds the Zurich event list (Street Parade, Sechseläuten, Züri Fäscht, football)?
+5. **Battery:** do we keep it in the decision, or focus only on buying?
 
 ## 7. What changed
 
 | | v3 | v4 | v5 (now) |
 |---|---|---|---|
-| User | Utility with a battery | DSO (plus a battery) | DSO (plus a battery) |
+| User | Utility with a battery | DSO (plus a battery) | **ewz, Zurich's DSO** (plus a battery) |
 | What we predict | Price only | Demand and price | **Demand and price** |
 | How often | Once a day | Every 4 hours, next 4 hours | **Once a day at 11:00, for tomorrow** |
 | Time step | 24 hourly prices | One 4-hour block | **6 blocks of 4 hours** |

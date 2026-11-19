@@ -33,7 +33,7 @@
   <rect x="560" y="352" width="166" height="26" rx="13" fill="#0d9488"/>
   <text x="643" y="370" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">OUR FOCUS</text>
   <text x="60" y="372" font-size="18" font-weight="700" fill="#0f172a">DSO: distribution system operator (our user)</text>
-  <text x="60" y="400" font-size="14" fill="#134e4a">Municipal or regional utility (e.g. a Stadtwerk)</text>
+  <text x="60" y="400" font-size="14" fill="#134e4a">ewz, the city utility of Zurich</text>
   <text x="60" y="424" font-size="14" fill="#134e4a">Runs the local grid, from 16 kV down to 0.4 kV</text>
   <text x="60" y="448" font-size="14" fill="#134e4a">Buys energy every day for the homes and businesses it supplies</text>
   <text x="60" y="472" font-size="14" fill="#134e4a">Owns a grid battery (10 MW / 20 MWh) and can sell energy back</text>
@@ -123,5 +123,5 @@
   <line x1="810" y1="795" x2="860" y2="795" stroke="#0d9488" stroke-width="2.5" marker-end="url(#aPlan)"/>
   <text x="870" y="800" font-size="13" fill="#334155">Buy / sell / battery plan to the DSO</text>
 
-  <text x="40" y="858" font-size="12" fill="#94a3b8">Business Analytics &amp; Data Science Applications, HSG HS 2026 · Group project: day-ahead demand and price forecasting for a Swiss DSO</text>
+  <text x="40" y="858" font-size="12" fill="#94a3b8">Business Analytics &amp; Data Science Applications, HSG HS 2026 · Group project: day-ahead demand and price forecasting for Zurich (ewz)</text>
 </svg>
