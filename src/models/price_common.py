@@ -6,7 +6,8 @@ joblib imports this module by itself when it unpickles the model).
 
 * `PriceExtras`      derived columns (shape of day D, weekday of day D, fuel spread, interactions)
 * `AsinhTarget`      wrapper: the estimator learns asinh-scaled CHANGES vs a reference price
-* `DayShapeTarget`   wrapper: two-stage model (day-mean change + within-day shape)
+* `DayShapeTarget`   wrapper: two-stage model (day-mean change + within-day shape), tried, not used
+* `ScaledQuantile`   widens the quantile band around the median (factor chosen on September)
 """
 from __future__ import annotations
 

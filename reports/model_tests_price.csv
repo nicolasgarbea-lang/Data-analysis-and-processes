@@ -1,0 +1,7 @@
+target,split,model_a,model_b,loss,mean_diff,dm_stat,p_value,n_days
+price,val,best,naive,daily mean absolute error,-9.917987504836388,-3.5204499061875065,0.0014446035303890543,30
+price,val,best,gbm,daily mean absolute error,-2.6057705341318655,-3.658033983585917,0.0010036546373127886,30
+price,test,best,naive,daily mean absolute error,-12.47366667308439,-4.229496500942814,0.0002025097143963206,31
+price,test,best,gbm,daily mean absolute error,-5.832090579725765,-4.488179340413361,9.839896131179306e-05,31
+price,rolling,best,naive,daily mean absolute error,-11.359070928404082,-8.427059913970236,1.0711361244525402e-15,335
+price,rolling,best,gbm,daily mean absolute error,-0.2904363187185415,-0.9878895358584561,0.3239218566518502,335

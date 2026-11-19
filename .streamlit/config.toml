@@ -1,0 +1,14 @@
+# Streamlit settings for the day-ahead planning app (local and Streamlit Community Cloud).
+# No theme "base" is set, so the app follows the viewer's light / dark setting.
+[theme]
+primaryColor = "#2a78d6"
+
+[server]
+headless = true
+runOnSave = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "viewer"

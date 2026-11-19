@@ -1,0 +1,68 @@
+{
+  "seed": 42,
+  "linear_ladder": {
+    "alpha": 10.0
+  },
+  "rf_ladder": {
+    "n_estimators": 120,
+    "max_depth": 14,
+    "min_samples_leaf": 5,
+    "max_features": 0.4
+  },
+  "gbm_ladder": {
+    "learning_rate": 0.03,
+    "n_estimators": 1000,
+    "num_leaves": 31,
+    "min_child_samples": 20,
+    "subsample": 0.8,
+    "subsample_freq": 1,
+    "colsample_bytree": 0.5,
+    "reg_lambda": 0.0
+  },
+  "best": {
+    "transform": "diff",
+    "reference_col": "ref_shape7",
+    "asinh_scale": 50.0,
+    "weather": "hybrid",
+    "drop_features": "EU_ICON",
+    "add_features": [],
+    "use_extras": true,
+    "gbm_params": {
+      "learning_rate": 0.03,
+      "n_estimators": 1000,
+      "num_leaves": 31,
+      "min_child_samples": 20,
+      "subsample": 0.8,
+      "subsample_freq": 1,
+      "colsample_bytree": 0.5,
+      "reg_lambda": 0.0
+    },
+    "n_seeds": 3,
+    "objective": "l2",
+    "huber_alpha": 20.0,
+    "half_life_years": 1.0,
+    "start_date": null,
+    "linear_weight": 0.35,
+    "linear_alpha": 30.0,
+    "linear_windows_years": [
+      null
+    ],
+    "walk_forward": true,
+    "refit_every_days": 7,
+    "quantiles": [
+      0.1,
+      0.5,
+      0.9
+    ],
+    "band_factor": 1.4,
+    "quantile_params": {
+      "learning_rate": 0.03,
+      "n_estimators": 600,
+      "num_leaves": 15,
+      "min_child_samples": 40,
+      "subsample": 0.8,
+      "subsample_freq": 1,
+      "colsample_bytree": 0.5
+    }
+  }
+}

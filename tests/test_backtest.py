@@ -1,4 +1,6 @@
-"""Tests for the backtest settlement (src/backtest/run_backtest.py)."""
+"""Tests for the backtest settlement, the ceiling, tuning cutoff and statistics
+(src/backtest/run_backtest.py, src/backtest/analysis.py)."""
+import datetime as dt
 import time
 
 import numpy as np
@@ -7,13 +9,20 @@ import pytest
 
 import src.backtest.run_backtest as rb
 from src.backtest.run_backtest import (
-    STRATEGIES, ImbalanceParams, plan_day, run_backtest, settle_hours, summarise,
+    CEILING, STRATEGIES, DecisionParams, ImbalanceParams, bootstrap_sums, carry_soc, paired_bootstrap_ci,
+    plan_day, run_backtest, settle_hours, summarise,
 )
 from src.optimisation.battery_lp import BatteryParams
 
 BAT = BatteryParams(power_mw=20, capacity_mwh=40, soc_min_frac=0.1, soc_max_frac=0.9, soc_start_frac=0.5,
                     round_trip_efficiency=0.9, max_cycles_per_day=1, wear_cost_eur_per_mwh=5.0)
 IMB = ImbalanceParams(shortage_factor=1.2, surplus_factor=0.8)
+HOURLY = DecisionParams(plan_resolution="hourly_shape", shape_daytype=True)
+
+
+@pytest.fixture(autouse=True)
+def _serial(monkeypatch):
+    monkeypatch.setenv("BACKTEST_WORKERS", "1")  # no process pool inside the tests
 
 
 def _hp(demand_bid, charge_bid, limit, dis):
@@ -21,6 +30,7 @@ def _hp(demand_bid, charge_bid, limit, dis):
                          "charge_limit_eur_mwh": limit, "planned_discharge_mwh": dis})
 
 
+# --- settlement -------------------------------------------------------------------
 def test_tiny_hand_computed_day():
     """Hour 0: buy 100 + charge 10 at 40 EUR (limit 50 -> clears), city uses 98 -> 2 MWh surplus.
     Hour 1: buy 90 at 100 EUR, discharge 9, city uses 101 -> 2 MWh shortage."""
@@ -69,6 +79,54 @@ def test_soc_limits_and_energy_conservation_hold():
     assert st["surplus_mwh"].sum() == pytest.approx(st["charge_overflow_mwh"].sum())
 
 
+# --- missing / non-finite data -------------------------------------------------------
+@pytest.mark.parametrize("which", ["price", "fx", "demand"])
+def test_settlement_rejects_missing_actuals(which):
+    hp = _hp([100.0, 90.0], [0.0, 0.0], [np.nan, np.nan], [0.0, 0.0])
+    hp["delivery_date"] = "2026-10-14"
+    hp["local_time"] = pd.date_range("2026-10-14 00:00", periods=2, freq="h", tz="Europe/Zurich")
+    d, p, fx = [100.0, 90.0], [40.0, 50.0], [0.93, 0.93]
+    if which == "price":
+        p = [40.0, np.nan]
+    elif which == "fx":
+        fx = [0.93, np.inf]
+    else:
+        d = [np.nan, 90.0]
+    with pytest.raises(ValueError, match="2026-10-14 0[01]:00"):
+        settle_hours(hp, d, p, fx, BAT, 20.0, IMB)
+
+
+def _patched_hours(monkeypatch, day, fn):
+    data = dict(rb.load_data())
+    hours = dict(data["hours"])
+    hours[day] = fn(hours[day].copy())
+    data["hours"] = hours
+    monkeypatch.setattr(rb, "load_data", lambda: data)
+
+
+@pytest.mark.parametrize("col", ["price_eur_mwh", "eurchf", "demand_mw"])
+def test_plan_day_rejects_missing_price_fx_demand(monkeypatch, col):
+    day = dt.date(2026, 10, 14)
+
+    def spoil(h):
+        h.loc[17, col] = np.nan
+        return h
+    _patched_hours(monkeypatch, day, spoil)
+    with pytest.raises(ValueError, match="2026-10-14 17:00"):
+        plan_day(day, "baseline_naive_no_battery")
+    with pytest.raises(ValueError, match="2026-10-14 17:00"):
+        plan_day(day, "ml_battery")
+
+
+def test_plan_day_rejects_wrong_hour_count(monkeypatch):
+    day = dt.date(2026, 10, 25)  # 25-hour day
+    _patched_hours(monkeypatch, day, lambda h: h.drop(index=3).reset_index(drop=True))
+    with pytest.raises(ValueError, match="expected 25"):
+        plan_day(day, "ml_battery")
+    assert rb.expected_hours("2026-03-29") == 23 and rb.expected_hours("2026-10-14") == 24
+
+
+# --- strategies ---------------------------------------------------------------------
 @pytest.mark.parametrize("strategy", ["perfect_foresight_battery", "perfect_foresight_hourly_battery",
                                       "perfect_demand_no_battery"])
 def test_perfect_foresight_has_zero_imbalance(strategy):
@@ -80,6 +138,15 @@ def test_perfect_foresight_has_zero_imbalance(strategy):
         assert np.isnan(s["share_charge_cleared"]) or s["share_charge_cleared"] == pytest.approx(1.0)
 
 
+def test_oracles_ignore_tuned_margin_and_limits():
+    tuned = DecisionParams(min_spread_eur_mwh=50.0, charge_limit_factor=0.5)
+    for s in ["perfect_foresight_battery", "perfect_foresight_hourly_battery"]:
+        a = plan_day("2026-10-14", s, decision=tuned)
+        b = plan_day("2026-10-14", s, decision=DecisionParams())
+        assert a["summary"]["total_cost_chf"] == pytest.approx(b["summary"]["total_cost_chf"])
+        assert a["plan"]["charge_limit_eur_mwh"].isna().all()
+
+
 @pytest.mark.parametrize("strategy", [k for k, v in STRATEGIES.items() if not v["battery"]])
 def test_no_battery_strategies_never_touch_battery(strategy):
     daily, _ = run_backtest("2026-10-01", "2026-10-05", strategies=[strategy], n_boot=0)
@@ -87,14 +154,146 @@ def test_no_battery_strategies_never_touch_battery(strategy):
     assert (daily["soc_end_mwh"] == daily["soc_start_mwh"]).all()
 
 
-def test_costs_add_up_and_charge_level_is_carried_over():
+@pytest.mark.parametrize("decision", [DecisionParams(), HOURLY], ids=["block", "hourly_shape"])
+def test_costs_add_up_and_charge_level_is_carried_over(decision):
     daily, summary = run_backtest("2026-10-01", "2026-10-07", strategies=["ml_battery", "baseline_naive_no_battery"],
-                                  n_boot=0)
+                                  decision=decision, n_boot=0)
     total = daily["da_cost_eur"] + daily["imbalance_cost_eur"] + daily["wear_cost_eur"]
     assert np.allclose(total, daily["total_cost_eur"])
     ml = daily[daily.strategy == "ml_battery"].reset_index(drop=True)
     assert np.allclose(ml["soc_start_mwh"].iloc[1:].to_numpy(), ml["soc_end_mwh"].iloc[:-1].to_numpy())
     assert ml["soc_start_mwh"].iloc[0] == pytest.approx(BatteryParams.from_config().soc_start)
+    bat = BatteryParams.from_config()
+    assert ((ml["soc_end_mwh"] >= bat.soc_min) & (ml["soc_end_mwh"] <= bat.soc_max)).all()
+
+
+def test_carried_soc_clips_drift_and_rejects_real_errors():
+    bat = BatteryParams.from_config()
+    assert carry_soc(bat.soc_max + 1e-9, bat) == bat.soc_max
+    assert carry_soc(bat.soc_min - 1e-9, bat) == bat.soc_min
+    with pytest.raises(AssertionError):
+        carry_soc(bat.soc_max + 0.5, bat)
+    with pytest.raises(AssertionError):
+        carry_soc(np.nan, bat)
+
+
+def test_end_target_fallback_only_on_infeasibility(monkeypatch):
+    calls = []
+
+    def fake(*a, soc_end_mwh=None, **k):
+        calls.append(soc_end_mwh)
+        if len(calls) == 1:
+            raise RuntimeError(msg)
+        return pd.DataFrame()
+    monkeypatch.setattr(rb, "solve_battery_plan", fake)
+    msg = "battery plan could not be solved: The problem is infeasible."
+    _, relaxed = rb._solve([1.0], [1.0], [1.0], BAT, 30.0)
+    assert relaxed and calls == [BAT.soc_start, 30.0]
+    calls.clear()
+    msg = "battery plan could not be solved: time limit reached"
+    with pytest.raises(RuntimeError, match="time limit"):
+        rb._solve([1.0], [1.0], [1.0], BAT, 30.0)
+
+
+def test_ceiling_dominates_every_strategy_with_matched_inventory():
+    """Over a period, the hourly ceiling's inventory-adjusted cost is <= every other strategy's,
+    and it ends the period with exactly the charge level it started with."""
+    daily, summary = run_backtest("2026-10-01", "2026-10-10", n_boot=0)
+    t = summary.set_index("strategy")["total_cost_adj_chf"]
+    for s, v in t.items():
+        assert t[CEILING] <= v + 0.01, s
+    c = daily[daily.strategy == CEILING].sort_values("delivery_date")
+    assert c["soc_end_mwh"].iloc[-1] == pytest.approx(c["soc_start_mwh"].iloc[0], abs=1e-5)
+    assert summary.set_index("strategy").loc[CEILING, "inventory_value_chf"] == pytest.approx(0, abs=0.05)
+    # the ceiling is also at least as good as the block oracle without the adjustment
+    assert t[CEILING] <= t["perfect_foresight_battery"] + 0.01
+
+
+def test_single_day_planning_is_fast():
+    plan_day("2026-10-10", "ml_battery")  # warm-up (loads the data once)
+    t = time.time()
+    plan_day("2026-10-11", "ml_battery", decision=HOURLY)
+    plan_day("2026-10-11", "ml_battery", decision=DecisionParams())
+    plan_day("2026-10-11", "perfect_foresight_hourly_battery")
+    assert (time.time() - t) / 3 < 0.5
+
+
+# --- hourly price shape -------------------------------------------------------------
+def test_price_shape_uses_only_earlier_days():
+    day = dt.date(2026, 10, 14)
+    shape = dict(rb.price_shape(day, 7, False))
+    h = pd.concat([rb.load_data()["hours"][day - dt.timedelta(days=k)] for k in range(1, 8)])
+    h["dev"] = h["price_eur_mwh"] - h.groupby(["delivery_date", "block"])["price_eur_mwh"].transform("mean")
+    expect = h.groupby(["delivery_date", "hour_local"])["dev"].mean().groupby(level=1).mean()
+    for hr, v in expect.items():
+        assert shape[hr] == pytest.approx(v)
+    # every block keeps its forecast mean after shaping
+    hrs = rb.day_hours(day)
+    hp = rb.hourly_price_forecast(np.arange(6) * 10.0, hrs, tuple(shape.items()))
+    assert pd.Series(hp).groupby(hrs["block"].to_numpy()).mean().to_numpy() == pytest.approx(np.arange(6) * 10.0)
+
+
+# --- tuning cutoff --------------------------------------------------------------------
+def test_tuning_cutoff_and_periods():
+    from src.backtest.analysis import check_tuning_dates, tune_decision
+    assert rb.tuning_cutoff() == dt.date(2026, 9, 29)
+    per = rb.tuning_periods()
+    alld = per["rolling"] + per["september"]
+    assert max(alld) == dt.date(2026, 9, 29) and min(alld) == dt.date(2025, 10, 1)
+    assert not any(d >= dt.date(2026, 10, 1) for d in alld)
+    check_tuning_dates(alld)                                  # fine
+    for bad in [dt.date(2026, 9, 30), dt.date(2026, 10, 1), dt.date(2026, 10, 15)]:
+        with pytest.raises(ValueError, match="2026-09-29"):
+            check_tuning_dates([dt.date(2026, 9, 1), bad])
+    with pytest.raises(ValueError):
+        tune_decision([dt.date(2026, 8, 1)], [dt.date(2026, 10, 2)])
+
+
+def test_tuned_decision_reads_the_chosen_row(monkeypatch, tmp_path):
+    f = tmp_path / "tuning.csv"
+    pd.DataFrame([
+        {"chosen": False, "plan_resolution": "block", "shape_days": 7, "shape_daytype": False, "charge_limit_factor": 0.9,
+         "use_limit": True, "limit_rule": "factor", "min_spread_eur_mwh": 0.0, "protect": "none"},
+        {"chosen": True, "plan_resolution": "hourly_shape", "shape_days": 14, "shape_daytype": True,
+         "charge_limit_factor": 1.0, "use_limit": False, "limit_rule": "factor", "min_spread_eur_mwh": 5.0,
+         "protect": "at_risk_bid"},
+    ]).to_csv(f, index=False)
+    monkeypatch.setattr(rb, "TUNING_FILE", f)
+    rb._TUNED_CACHE.clear()
+    try:
+        d = rb.tuned_decision()
+        assert d == DecisionParams(plan_resolution="hourly_shape", shape_days=14, shape_daytype=True,
+                                   charge_limit_factor=1.0, use_limit=False, min_spread_eur_mwh=5.0,
+                                   protect="at_risk_bid")
+    finally:
+        rb._TUNED_CACHE.clear()
+
+
+def test_small_tuning_run_records_all_periods():
+    from src.backtest.analysis import tune_decision
+    roll = rb.dates_between("2026-08-25", "2026-08-31")
+    sept = rb.dates_between("2026-09-20", "2026-09-29")
+    tab, chosen, kept = tune_decision(roll, sept, n_boot=100)
+    for c in ["saving_rolling_chf", "saving_sept_chf", "saving_combined_chf"]:
+        assert tab[c].notna().all()
+    assert np.allclose(tab["saving_combined_chf"], tab["saving_rolling_chf"] + tab["saving_sept_chf"])
+    assert tab["chosen"].sum() == 1
+    assert (tab["cutoff"] == "2026-09-29").all()
+    assert isinstance(chosen, DecisionParams)
+
+
+# --- statistics -------------------------------------------------------------------------
+def test_paired_bootstrap_hand_example():
+    a, b = [10.0, 20.0], [9.0, 17.0]                 # daily savings 1 and 3
+    idx = [[0, 0], [0, 1], [1, 0], [1, 1]]           # all 4 resamples of 2 days
+    assert bootstrap_sums(np.subtract(a, b), idx) == pytest.approx([2, 4, 4, 6])
+    lo, hi = paired_bootstrap_ci(a, b, idx=idx)
+    # np.percentile (linear) of [2, 4, 4, 6]: 2.5 % -> 2 + 0.075 * 2, 97.5 % -> 4 + 0.925 * 2
+    assert (lo, hi) == pytest.approx((2.15, 5.85))
+    assert paired_bootstrap_ci(a, b, idx=idx, shift=1.0) == pytest.approx((3.15, 6.85))
+    # many random draws converge to the exact interval of the sum (2 .. 6)
+    lo, hi = paired_bootstrap_ci(a, b, n_boot=20000, seed=1)
+    assert lo == pytest.approx(2.0) and hi == pytest.approx(6.0)
 
 
 def test_summary_bootstrap_is_reproducible():
@@ -103,25 +302,30 @@ def test_summary_bootstrap_is_reproducible():
     a = summarise(daily, n_boot=200, seed=7)
     b = summarise(daily, n_boot=200, seed=7)
     pd.testing.assert_frame_equal(a, b)
+    r = a.set_index("strategy").loc["ml_battery"]
+    assert r["saving_vs_baseline_adj_chf"] == pytest.approx(r["saving_vs_baseline_chf"] + r["inventory_value_chf"])
 
 
-def test_price_noise_sensitivity_reproducible():
+def test_price_noise_sensitivity_zero_noise_reference():
     from src.backtest.analysis import price_error_sensitivity
-    from src.backtest.run_backtest import DecisionParams, dates_between
-    dates = dates_between("2026-10-01", "2026-10-03")
-    a = price_error_sensitivity(dates, DecisionParams(), sigmas=(0, 20), seeds=2, seed=3)
-    b = price_error_sensitivity(dates, DecisionParams(), sigmas=(0, 20), seeds=2, seed=3)
+    dates = rb.dates_between("2026-10-01", "2026-10-03")
+    dec = DecisionParams()
+    a = price_error_sensitivity(dates, dec, sigmas=(0, 20), seeds=2, seed=3)
+    b = price_error_sensitivity(dates, dec, sigmas=(0, 20), seeds=2, seed=3)
     pd.testing.assert_frame_equal(a, b)
+    zero = a[(a["forecast"] == "noise") & (a["sigma"] == 0)].iloc[0]
+    assert zero["lost_saving_chf"] == 0.0                                  # reference = same policy, no noise
+    assert zero["price_mae_eur_mwh"] == 0.0
+    assert a.attrs["reference_cost_chf"] == pytest.approx(zero["total_cost_adj_chf"])
+    assert a.attrs["policy_gap_to_ceiling_chf"] >= -0.01                   # the ceiling is never beaten
+    # the zero-noise run equals planning with the true block prices under the same rules
+    spec = dict(demand="actual", price="actual", battery=True, policy="given")
+    d, _ = rb.run_strategy(dates, spec, decision=dec)
+    from src.backtest.analysis import adj_cost
+    assert adj_cost(d) == pytest.approx(zero["total_cost_adj_chf"])
 
 
-def test_single_day_planning_is_fast():
-    plan_day("2026-10-10", "ml_battery")  # warm-up (loads the data once)
-    t = time.time()
-    plan_day("2026-10-11", "ml_battery")
-    plan_day("2026-10-11", "perfect_foresight_hourly_battery")
-    assert (time.time() - t) / 2 < 0.5
-
-
+# --- prediction files ---------------------------------------------------------------------
 def test_require_ml_fails_loudly(monkeypatch, tmp_path):
     monkeypatch.setattr(rb, "PRED_FILES", {"demand": tmp_path / "nope_d.parquet", "price": tmp_path / "nope_p.parquet"})
     rb.load_forecasts.cache_clear()
@@ -142,6 +346,8 @@ def test_real_prediction_files_are_picked_up(monkeypatch, tmp_path):
         for c in ["pred_naive", "pred_linear", "pred_rf", "pred_gbm"]:
             p[c] = val - 1
         p["pred_best"] = val
+        if target == "price":
+            p["pred_q10"], p["pred_q90"] = val - 10, val + 10
         p.to_parquet(tmp_path / f"pred_{target}.parquet")
     monkeypatch.setattr(rb, "PRED_FILES", {"demand": tmp_path / "pred_demand.parquet",
                                            "price": tmp_path / "pred_price.parquet"})
@@ -151,12 +357,14 @@ def test_real_prediction_files_are_picked_up(monkeypatch, tmp_path):
         fc = rb.load_forecasts(require_ml=True)
         oct_ = fc[fc.split == "test"]
         assert len(oct_) == 186 and (oct_.demand_ml_mw == 250).all() and (oct_.price_ml_eur_mwh == 77).all()
-        assert (oct_.demand_source == "ml").all()
-        r = plan_day("2026-10-14", "ml_battery", require_ml=True)
+        assert (oct_.demand_source == "ml").all() and (oct_.price_q90_eur_mwh == 87).all()
+        r = plan_day("2026-10-14", "ml_battery", decision=DecisionParams(), require_ml=True)
         assert r["plan"]["price_eur_mwh"].eq(77).all()
         assert r["summary"]["forecast_demand_mwh"] == pytest.approx(250 * 24)
+        q = plan_day("2026-10-14", "ml_battery", decision=DecisionParams(limit_rule="quantile"), require_ml=True)
+        assert (q["plan_periods"]["charge_limit_eur_mwh"].dropna() <= 87 + 1e-9).all()
         # outside the file the ML forecast is missing -> loud error, no silent fallback
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="block 0"):
             plan_day("2026-09-14", "ml_battery", require_ml=True)
     finally:
         rb.load_forecasts.cache_clear()

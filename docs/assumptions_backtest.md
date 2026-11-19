@@ -1,46 +1,53 @@
-# Assumptions – decision, auction bids and backtest (agent B1)
+# Assumptions – decision, auction bids and backtest (agents B1, B2)
 
 One line each, with the reason. Code: `src/decision/bids.py`, `src/backtest/run_backtest.py`, `src/backtest/analysis.py`.
 
+## Planning (decision options, `config.yaml` → `bidding`)
+- The user always sees the 6-block decision table (option labels per block); the bids are hourly anyway, so the optimiser may plan per block (`plan_resolution: block`) or per hour (`hourly_shape`).
+- `hourly_shape`: hourly price forecast = block price forecast + typical within-block hourly shape; shape of local hour h = mean over the last `shape_days` days STRICTLY before the delivery day (T−1 = day D, prices known since the D−1 auction) of (hourly price − that day's block mean); re-centred so each block keeps its forecast mean. Reason: a 2-hour battery fits inside a 4-hour block, so block averages hide most of the spread.
+- `shape_daytype: true` uses only past days of the same type (workday vs weekend/holiday, from `is_weekend`/`is_holiday`), within the last 8 weeks.
+- Hourly demand forecast = block forecast × last week's hourly shape of the same block (the same shares used for the bids).
+- DST: the shape uses the local clock hour; on the 25-hour day both 02:00 hours get the same shape value, on the 23-hour day hour 2 simply does not exist; the optimiser then plans 25 or 23 periods.
+- Option label of a block in hourly mode = label of the block sums; if a block both charges and discharges, the net direction decides (`buy_and_store` or `use_storage_and_buy`).
+- `min_spread_eur_mwh` is added to the wear cost in the plan only (cycle only if the expected spread covers losses + wear + margin); the real wear is billed.
+- End-of-day target = config start level (50 %); the target is relaxed to "end at the day's start level" ONLY if the optimiser reports the problem as infeasible (flag `soc_target_relaxed`); any other solver failure stops the run.
+
 ## Bids
-- Bids are hourly (one demand bid + at most one charge bid per hour); the auction's 15-minute products are not modelled, because our price data is hourly.
-- Demand bid per hour = block demand forecast × hour share − planned discharge of the hour (never below 0); per block the demand bids sum to forecast − planned discharge, so demand + charge bids = the plan's `buy_mwh`.
-- Hour shares = actual hourly demand of the same block on delivery date − 7 days (known at forecast time; data up to D−1 is available); flat split if that week is missing.
-- DST: a target hour missing from the reference week (the extra 02:00 of a 25-hour day) gets the reference block mean; a missing hour in the target day (spring) simply drops out; shares are renormalised to 1.
-- Planned discharge and planned charge are split evenly over the hours of the block (keeps each hour ≤ battery power).
-- Demand bids are price-independent ("market"), because the city must be supplied.
-- Charge limit = expected discharge price × `bidding.charge_limit_factor` − wear cost; expected discharge price = discharge-weighted forecast price of the planned discharge blocks after the charge block.
-- If no discharge follows the charge block, the discharge-weighted price of all discharge blocks of the day is used.
-- If the plan has no discharge at all (pure refill to the end-of-day target), the limit = highest forecast block price of the day: the energy replaces purchases on later days, so we accept up to the most expensive expected block.
-- Perfect-foresight strategies bid charge energy without a limit ("charge limit not binding").
+- Bids are hourly (one demand bid + at most one charge bid per hour); 15-minute products are not modelled, because our price data is hourly.
+- Demand bid per hour = forecast need of the hour − planned discharge of the hour; price-independent ("market"), because the city must be supplied.
+- Hour shares = actual hourly demand of the same block on delivery date − 7 days (known at forecast time); flat split if that week is missing; a target hour missing from the reference week gets the reference block mean; shares are renormalised to 1.
+- Planned discharge of a block is spread over its hours as evenly as possible but never above min(hour's forecast need, battery power) (water filling); block totals are conserved exactly, so demand bids are never negative.
+- To guarantee this, the block optimiser gets the block demand capped at Σ_h min(need_h, power); the rest of the block is bought price-independently outside the optimisation (a constant cost, so the plan is unchanged except for this extra limit).
+- Planned charge is split evenly over the block's hours (≤ power, because the block charge ≤ power × hours).
+- Charge limit = expected discharge price × `charge_limit_factor` − wear cost (expected discharge price = discharge-weighted forecast price of the planned discharge periods after the charge period, else of all discharge periods of the day); pure refill (no discharge planned) → limit = highest forecast price of the day; `use_limit: false` → price-independent charge bids.
+- `limit_rule: quantile` additionally caps the limit at the q90 price forecast of the charge period (only when `pred_q90` exists in the price predictions).
+- `protect: at_risk_bid`: planned discharge not covered by the energy surely available (start stock above minimum + price-independent charges) is added to the price-independent demand bid; if not needed it is sold back as surplus.
+- Oracles (5, 6) bid charge energy without a limit, use physical wear only, no margin, no protection.
 
 ## Settlement
 - Settlement uses ACTUAL hourly day-ahead prices and ACTUAL hourly Zurich demand (`data/processed/hourly_actuals.parquet`), never forecasts.
-- A charge bid clears fully if actual price ≤ limit, otherwise not at all (no partial clearing; we are a price taker).
-- The battery follows the cleared plan hour by hour: efficiency √0.9 each way, power ≤ `power_mw` per hour, charge level inside [10 %, 90 %].
-- Planned discharge that is impossible (battery too empty because a charge bid did not clear) is not delivered; the missing energy becomes a shortage.
-- Cleared charge energy that does not fit in the battery goes to the city (counts as available energy, usually becoming surplus).
-- Energy for the city per hour = demand bid + actual discharge (+ overflow); imbalance = actual demand − available energy.
-- Shortage is paid at `p + (shortage_factor − 1)·|p|`, surplus is sold at `p − (1 − surplus_factor)·|p|` (p = actual hourly DA price; factors 1.2/0.8 from config `imbalance`). The |p| keeps it a penalty at negative prices. Real Swissgrid imbalance prices are not used.
-- "Imbalance cost" in the outputs = net money for the imbalance energy (included in the total); "imbalance penalty" = only the extra over the DA price (shortage·0.2·|p| + surplus·0.2·|p|).
-- Battery wear = wear cost × MWh actually discharged.
-- Total cost = DA purchases (demand + cleared charge) + imbalance cost + wear; CHF = hourly EUR × ECB EUR/CHF of the delivery date (CHF per EUR).
-- The actual end-of-day charge level is carried into the next day's plan (known at forecast time: the battery follows only the cleared bids, and day D's auction results are known since D−1).
-- End-of-day target = config start level (50 %); if the optimiser cannot reach it, the target is relaxed to "end at the start level of the day" (flag `soc_target_relaxed`; never needed with the default battery).
-- Every evaluation period starts with the battery at 50 %; the small end-of-period differences between strategies are not valued.
-- The battery does not change market prices (price taker); no selling to the market (`allow_sell: false`).
+- Every delivery day must have 23/24/25 consecutive hours; a missing or non-finite actual price, demand or EUR/CHF value (and a non-finite bid) stops the run with a ValueError naming the hour – it is never summed as 0.
+- A charge bid clears fully if actual price ≤ limit, otherwise not at all (price taker, no partial clearing).
+- The battery follows the cleared plan hour by hour: efficiency √0.9 each way, power ≤ `power_mw` per hour, charge level inside [10 %, 90 %]; planned discharge that is impossible is not delivered (becomes shortage); cleared charge that does not fit goes to the city.
+- Imbalance price (p = actual hourly DA price): shortage costs `p + (shortage_factor − 1)·|p|` per MWh, surplus earns `p − (1 − surplus_factor)·|p|` per MWh (factors 1.2/0.8 from config `imbalance`); |p| keeps it a penalty at negative prices. Real Swissgrid imbalance prices are not used.
+- "Imbalance penalty" in the outputs = only the extra over the DA price; total cost = DA purchases + imbalance cost + wear; CHF = hourly EUR × ECB EUR/CHF of the delivery date.
+- The actual end-of-day charge level is carried into the next day (known at forecast time); drift ≤ 1e-6 MWh is clipped, anything larger is an error.
 
-## Strategies and forecasts
-- Naive = same block 7 days earlier (`demand_lag_7d_same_block`, `price_lag_7d_same_block`, or `pred_naive` from the prediction files).
-- ML = `pred_best` from `reports/predictions_<target>.parquet`; picked up automatically when the files exist; `--require-ml` fails loudly if they are missing; dates not in the files have no ML forecast (error, no silent fallback).
-- STAND-IN (only while the ML files do not exist, labelled "standin" everywhere): demand = 4-week same-weekday block mean, price = same block on day D.
-- Perfect foresight = actual block demand and block mean price, actual hourly shape, no charge limit; the hourly variant plans 24 (23/25) hourly periods with actual hourly values.
-- Strategy 7 (perfect demand, no battery) = the pure cost of serving the city; it separates forecast-error cost from battery value.
+## Strategies, ceiling and inventory
+- Strategies: 1 baseline (naive demand, no battery), 2 ML demand no battery, 3 naive forecasts + battery (tuned rules), 4 product = ML + battery with the tuned rules, 4b ML + battery with the plain block plan and config defaults, 5 perfect foresight with the same 4-hour block rules, 6 ceiling, 7 perfect demand without battery.
+- Ceiling (6) = ONE hourly perfect-foresight MILP over all hours of the period: power, charge limits, ≤ 1 cycle per delivery day, discharge ≤ hourly demand, end-of-period charge level = start level (matched inventory); simultaneous charge/discharge forbidden by a binary in negative-price hours (elsewhere it never pays and is netted out). It is a true lower bound; single-day comparisons with it are not meaningful (it shifts energy between days).
+- `plan_day` for strategy 6 on a single day (app) solves that day alone with end level = start level.
+- Every evaluation period starts at 50 %. Inventory adjustment (reported next to the raw numbers): adjusted cost = raw cost − (end − start charge level) × discharge efficiency × the period's mean actual DA price × mean EUR/CHF. Reason: a strategy that ends emptier used energy it did not pay for in the period.
+- "% of ceiling" and battery values use the adjusted costs.
+- Naive = same block 7 days earlier (`*_lag_7d_same_block` or `pred_naive`); ML = `pred_best` from `reports/predictions_<target>.parquet`, picked up automatically; dates not in a file have no ML forecast (error, no silent fallback); `--require-ml` fails if a file is missing.
+- STAND-IN (only while a prediction file does not exist, labelled "standin" in every output and in the notes): demand = 4-week same-weekday block mean, price = same block on day D.
 
 ## Tuning and sensitivities
-- Decision rules (charge limit factor ∈ {0.8, 0.9, 1.0, 1.1, none}, minimum spread margin ∈ {0, 5, 10, 20} EUR/MWh) are tuned on September 2026 only (+ the rolling period when real predictions exist); October is never used for choices.
-- The minimum spread margin is added to the wear cost in the plan only (the battery cycles only if the expected spread covers losses + wear + margin).
-- The config defaults are kept unless another setting is strictly cheaper on validation.
-- Sensitivities (battery size, price-forecast noise, imbalance factors, charge limit factor, wear cost) are run on October for information only.
-- Price-error sensitivity: perfect demand, zero-mean normal noise per block on the true block prices (σ ∈ {0,5,10,20,30,45,60,80}, 5 seeds), limit rule active; lost saving = cost − cost of perfect foresight; slope from a straight-line fit.
-- Bootstrap CI: whole days resampled with replacement, 1000 draws, seed from config.
+- The decision rules for the test month are tuned ONCE on the rolling period (2025-10-01 → 2026-08-31, `periods.rolling_start`) plus September up to 2026-09-29 (test start − 2 days: the last day whose settlement is known on 30 Sept 10:00); October is never used; `check_tuning_dates` enforces this.
+- Objective = product's inventory-adjusted saving vs baseline, rolling + September (both recorded separately and combined in `reports/decision_tuning.csv`).
+- Stage 1: plan resolution (block; hourly shape 7 d, 7 d same day type, 14 d) × margin {0, 5, 10, 20}; stage 2 on the winner: limit factor {0.8, 0.9, 1.0, 1.1, none} (+ q90 rule if available) × protection {none, at_risk_bid}.
+- A candidate replaces the stage reference only if it clearly wins: higher combined saving AND 95 % paired day-bootstrap interval of the improvement above 0; otherwise the defaults are kept.
+- Strategy 3 uses the same tuned rules as the product (isolates forecast quality).
+- Sensitivities (battery size 5/10 … 100/200, price-forecast noise, imbalance factors, charge limit factor, wear cost, allow_sell) are run on October for information only.
+- Price-error sensitivity: perfect demand, zero-mean normal noise per block on the true block prices (σ ∈ {0,5,10,20,30,45,60,80}, 5 seeds), the product's rules; reference = the zero-noise run with the SAME rules (lost saving = cost(σ) − cost(0)); the zero-noise run's gap to the ceiling / block oracle is reported separately as the policy cost.
+- Bootstrap CI: whole days resampled with replacement (paired: same days for both strategies), 1000 draws, seed from config; the inventory adjustment enters as a constant shift.

@@ -72,6 +72,9 @@ UNVERIFIED_DE = ["unverified_de_solar_fc", "unverified_de_solar_fc_day", "unveri
                  "unverified_de_wind_onshore_fc_day", "unverified_de_wind_offshore_fc",
                  "unverified_de_wind_offshore_fc_day", "unverified_de_load_fc", "unverified_de_load_fc_day"]
 
+# named groups for `drop_features` in the params file (keeps the json short)
+DROP_GROUPS = {"EU_ICON": EU_ICON_COLS, "NONE": []}
+
 # linear models: categorical columns made into dummies; trending inputs that a straight line extrapolates badly
 LINEAR_ONEHOT = ["block", "weekday", "month", "day_change_type"]
 LINEAR_CATEGORICAL = LINEAR_ONEHOT + ["school_holiday_type", "dD_weekday", "dD_daytype", "kickoff_hour_local"]
@@ -88,7 +91,7 @@ DEFAULT_PARAMS = {
         "reference_col": "ref_shape7",
         "asinh_scale": 50.0,
         "weather": "hybrid",                   # hybrid | oracle (sensitivity only)
-        "drop_features": [],
+        "drop_features": "EU_ICON",               # name of a column group (see DROP_GROUPS) or a list
         "add_features": [],
         "use_extras": True,
         "gbm_params": {"learning_rate": 0.03, "n_estimators": 1000, "num_leaves": 31, "min_child_samples": 20,
@@ -104,7 +107,7 @@ DEFAULT_PARAMS = {
         "walk_forward": True,
         "refit_every_days": 7,
         "quantiles": [0.1, 0.5, 0.9],
-        "band_factor": 1.3,
+        "band_factor": 1.4,
         "quantile_params": {"learning_rate": 0.03, "n_estimators": 600, "num_leaves": 15,
                             "min_child_samples": 40, "subsample": 0.8, "subsample_freq": 1,
                             "colsample_bytree": 0.5},
@@ -135,8 +138,19 @@ def best_features(cfg: dict) -> list[str]:
     if cfg.get("use_extras", True):
         feats += PriceExtras.output_columns
     feats += list(cfg.get("add_features", []))
-    drop = set(cfg.get("drop_features", []))
+    drop = set(dropped(cfg))
     return [c for c in dict.fromkeys(feats) if c not in drop]
+
+
+def dropped(cfg: dict) -> list[str]:
+    """Columns the configuration leaves out (`drop_features` may be a group name or a list)."""
+    drop = cfg.get("drop_features", [])
+    return list(DROP_GROUPS[drop] if isinstance(drop, str) else drop)
+
+
+def with_drop(cfg: dict, cols) -> dict:
+    """Copy of `cfg` that leaves out `cols` IN ADDITION to the columns it already drops."""
+    return dict(cfg, drop_features=list(dict.fromkeys(dropped(cfg) + list(cols))))
 
 
 def linear_columns(feats: list[str], onehot=LINEAR_ONEHOT) -> tuple[list[str], list[str]]:
@@ -650,14 +664,14 @@ def _variants(df, params, base, one, run, record, tr, va):
     run("B1 recency half-life 0.5 y", dict(one, half_life_years=0.5), "recency")
     run("B2 recency half-life 1.5 y", dict(one, half_life_years=1.5), "recency")
     run("B3 recency half-life 2 y", dict(one, half_life_years=2.0), "recency")
-    run("B4 train 2023+ only", dict(one, start_date="2023-01-01"), "recency")
-    run("B5 train 2024+ only (ICON era)", dict(one, start_date="2024-01-01"), "recency")
+    run("B4 train 2023+ only", dict(one, start_date="2023-01-01"), "recency", with_cv=False)  # early CV folds empty
+    run("B5 train 2024+ only (ICON era)", dict(one, start_date="2024-01-01"), "recency", with_cv=False)
     run("C1 L1 loss", dict(one, objective="l1"), "loss")
     run("C2 Huber loss (delta 20 EUR)", dict(one, objective="huber", huber_alpha=20.0), "loss")
     run("D1 no derived features", dict(one, use_extras=False), "features")
-    run("D2 without ICON eu_* columns", dict(one, drop_features=EU_ICON_COLS), "features")
-    run("D3 without Zurich weather", dict(one, drop_features=ZH_WEATHER_COLS), "features")
-    run("D4 without Zurich demand lags", dict(one, drop_features=DEMAND_COLS), "features")
+    run("D2 with ICON eu_* columns (drop nothing)", dict(one, drop_features=[]), "features")
+    run("D3 without Zurich weather", with_drop(one, ZH_WEATHER_COLS), "features")
+    run("D4 without Zurich demand lags", with_drop(one, DEMAND_COLS), "features")
     run("E1 3 seeds", dict(one, n_seeds=3), "ensemble", with_cv=False)
     for lw in (0.2, 0.35, 0.5):
         run(f"E2 3 seeds + LEAR ridge {int(lw * 100)} %", dict(one, n_seeds=3, linear_weight=lw), "ensemble",
@@ -680,10 +694,10 @@ def _sensitivity(one, run):
     """Sensitivity runs (single LightGBM, val + test) - for the notes only."""
     kw = dict(kind="sensitivity", with_test=True, with_cv=False)
     run("S0 sensitivity base (1 seed, all features)", one, **kw)
-    run("S1 without European weather (all eu_*)", dict(one, drop_features=EU_COLS + ["rad_de_x_trend",
-                                                                                    "wind_de_x_winter"]), **kw)
-    run("S2 without neighbour prices", dict(one, drop_features=NEIGHBOUR_COLS), **kw)
-    run("S3 without gas / CO2 / FX", dict(one, drop_features=FUEL_COLS), **kw)
+    run("S1 without European weather (all eu_*)", with_drop(one, EU_COLS + ["rad_de_x_trend", "wind_de_x_winter"]),
+        **kw)
+    run("S2 without neighbour prices", with_drop(one, NEIGHBOUR_COLS), **kw)
+    run("S3 without gas / CO2 / FX", with_drop(one, FUEL_COLS), **kw)
     run("S4 ORACLE Zurich weather (observed, NOT achievable)", dict(one, weather="oracle"), **kw)
     run("S5 + German TSO forecasts unverified_de_* (NOT allowed in product)", dict(one, add_features=UNVERIFIED_DE),
         **kw)
@@ -754,8 +768,16 @@ EUR/MWh. Prices can be near zero or negative, so the percentage error is the sym
 **Forecast time:** day D 10:00, for the six blocks of D+1. All CH and neighbour prices of day D are known (the
 auction for D ran on D−1); no price of D+1 is known.
 
-**Best model in one sentence:** LightGBM learns *how much the block price will differ from a price we already
-know* (the reference), giving recent days more weight; several seeds are averaged. Settings: `{best}`
+**Best model in one sentence:** we start from a price we already know – *the mean CH price of day D plus the
+usual difference of this block from the day mean over the last 7 days* (`ref_shape7`) – and LightGBM learns how
+much tomorrow's block will differ from it; recent days count more (weight halves every year), three LightGBM
+seeds are averaged and blended 65 / 35 with a LEAR-style ridge regression that learns the same change, and the
+model is refit every 7 days during the month with all prices known at that time. A quantile LightGBM (10/50/90 %)
+gives a band, widened by a factor 1.4 chosen on September so that ~80 % of actual prices fall inside it.
+
+Settings: `{best}`
+
+(`drop_features: "EU_ICON"` = the ICON-based European weather columns `eu_*_safe` are left out, see "What was tried".)
 """
 
 NOTES_DECISION_HELP = """`rank_corr` = Spearman correlation of the 6 block prices inside a day (1 = perfect order),
@@ -763,15 +785,114 @@ NOTES_DECISION_HELP = """`rank_corr` = Spearman correlation of the 6 block price
 (this is what the battery plan needs), `shape_mae` = MAE of (block − day mean), `daymean_mae` = MAE of the daily
 mean price (the level, used by the limit bids)."""
 
-NOTES_WORST = """(explanation filled in after the final run)"""
+NOTES_WORST = """**What happened (after-the-fact look at the data, incl. the German price of the delivery day):**
+
+1. **Thu 29 Oct, 16–20 – the biggest miss (−131 EUR).** A cold, almost wind-still evening in Germany (JMA wind
+   index ≈ 1, German price of that block ≈ 470 EUR, one CH hour at ≈ 600 EUR). The model forecast 319 (same block
+   on day D: 329, naive: 246); a block price of 451 EUR is far above anything since 2023 (the 2024 – Sep 2026
+   maximum was 282 EUR), so the trees had no similar case to learn from. The 10–90 % band (270–364) missed it too.
+2. **Sat 10 Oct, 12–16 (−46).** The model expected the usual sunny-weekend midday dip (139). Germany did crash to
+   ≈ 0 EUR (windy and sunny), but Switzerland stayed at 185 – CH decoupled from DE (most likely the
+   interconnectors were full; we have no capacity data). The naive forecast (60) was even worse.
+3. **Wed 28 Oct, 16–20 (−43)** and **Wed 28 Oct, 12–16 (−30).** The start of the same cold, low-wind spell:
+   the whole day rose by ≈ 30 EUR vs day D and the evening ramp was steeper than ever before.
+4. **Thu 1 Oct, 08–12 / 12–16 / 16–20 (−29 to −35).** First day of the test month: the day-mean price rose by
+   ≈ 21 EUR vs 30 Sep (180 → 201) without a matching move in gas; a model that learns changes vs day D
+   under-shoots such sudden level jumps.
+5. **Thu 8 Oct, 12–16 (−33).** Windy in Germany (German price ≈ 107), the model expected a midday dip; Switzerland
+   stayed at ≈ 214 – again CH decoupled from DE.
+6. **Sun 11 Oct, 12–16 (+31, the only "too high" miss in the top 6).** A real sunny-Sunday solar dip (89 EUR;
+   Germany 34). The model went down from 185 on Saturday to 120, but not far enough.
+7. **Mon 26 Oct, 08–12 (+29).** Windy Monday morning after the autumn clock change (German price ≈ 99); the
+   model expected a normal Monday morning ramp.
+
+**Pattern:** 8 of the 10 worst blocks are forecasts that were *too low*, all in the day-time and evening blocks
+(08–20) of a month in which prices rose by ≈ 30 % (gas TTF from ≈ 72 to ≈ 97 EUR/MWh). The model is anchored on day D, so it
+follows a trend with a lag of about one day; the mean October bias is −6.5 EUR/MWh. The two "too high" misses are
+weekend/Monday blocks with much more wind or sun than usual. There were no negative prices in October 2026.
+"""
+
 NOTES_CHOICE = """## Why this model won
-(filled in after the final run)
+* **Learn the change, not the level.** LightGBM on the price level (A0) has a CV MAE of ≈ 41 EUR because trees
+  cannot predict a price level they have never seen (the 2021–2022 crisis); learning the change vs a known
+  price cuts that to ≈ 12.6. Of the references, `ref_shape7` (day-D mean + 7-day block shape, A3) was best on
+  September and on the CV. The asinh-scaled change (A4/A5) and a two-stage day-mean + shape model (E5) were worse.
+* **Recency weights.** A half-life of 1 year beat no weights and 0.5 / 1.5 / 2 years on September (the CV is
+  flat at 12.5–13.0). Training only on 2023+ or 2024+ (B4/B5) was worse: the model needs the long history.
+* **L2 loss.** L1 and Huber (C1/C2) were not better on September or CV.
+* **Features.** Leaving out the ICON European weather columns (`eu_*_safe`, which only exist from 2024) helped
+  on September (13.9 vs 14.2) *and* on the CV (12.6 vs 12.8): with only 2.5 years of data the tree splits on them
+  are noisy, while the JMA columns (`eu_*_jma_safe`, full history) carry the German wind / temperature signal.
+  Derived columns (`PriceExtras`, e.g. day-D shape, weekday of day D, gas cost vs price, radiation × weekend)
+  helped (D1: 15.1 without them).
+* **Ensemble.** The LEAR-style ridge regression alone (E4) is close to a single LightGBM on September (14.1) but
+  much worse on the CV (16.7); blended 35 % it lowers the September MAE from 14.0 to 13.7 and halves the bias.
+  Averaging the ridge over three calibration windows (E3) did not help.
+* **Weekly walk-forward refit** (G1) beat a single fit (G0, 13.62 vs 13.67) and reduced the bias from −2.6 to −1.4
+  EUR; a daily refit (G2) was not better.
+* **Hyper-parameters.** An optuna search (15 trials, score = MAE of the two most recent CV folds,
+  `reports/tuning_price.csv`) found settings with a slightly better CV score, but all of them were worse on
+  September (14.6–16.9 vs 14.3), so the default LightGBM settings were kept. Differences between configurations
+  are often within the seed noise (≈ ±0.3 EUR on September with one seed), which is why we average 3 seeds.
 """
+
 NOTES_DRIVERS = """## Top-10 drivers
-(filled in after the final run)
+Single columns, permutation importance on Sep + Oct 2026 (see the table above). Shuffling a column that is part
+of the reference (`price_mean_day_D`, `price_block_vs_day_ratio_last_7d`) also breaks the reference itself, so
+these two are inflated by construction.
+
+1. **`price_mean_day_D`** – today's average CH price is the anchor: tomorrow's prices are mostly today's level plus a
+   change.
+2. **`radiation_wm2`** – the Zurich solar-radiation forecast for the block tells the model how deep the midday solar
+   dip will be (more sun = cheaper 12–16 block).
+3. **`price_block_vs_day_ratio_last_7d`** – the typical shape of the day over the last week (night cheap, evening
+   expensive) is the second half of the reference.
+4. **`block`** – the time of day itself: the evening block 16–20 and night block 20–24 are the most expensive,
+   midday the cheapest.
+5. **`weekday`** – Saturdays, Sundays and Mondays differ from day D in a predictable way (e.g. Sunday → Monday
+   prices rise, Friday → Saturday prices fall).
+6. **`is_weekend`** – weekend demand is lower, so weekend prices (especially midday) fall below the weekday level.
+7. **`clean_gas_cost`** – the cost of a gas power plant (gas + CO₂) sets the price in many hours; when it is far above
+   or below today's price, prices move towards it.
+8. **`price_lag_1d_same_block`** – the price of the same block today adds detail the 7-day shape misses
+   (e.g. a new evening peak).
+9. **`eu_radiation_wm2_de_mean_safe`** – the German solar forecast (used through `rad_de_x_trend`, radiation × years
+   since 2019): German solar build-out pushes the midday price down more every year.
+10. **`price_de_mean_day_D`** – the German price of day D: Switzerland mostly imports the German price level, the
+    CH–DE spread changes only slowly.
+
+Group view: the CH price of day D (lags + shape), the calendar and the Zurich weather forecast are by far the most
+important groups; the JMA European weather forecasts (German wind, French/German temperature), neighbour prices
+and gas/CO₂ follow; Swiss reservoir fill and the Swiss system data of D−1 add almost nothing on these two months.
 """
-NOTES_LIMITS = """## Limitations
-(filled in after the final run)
+
+NOTES_LIMITS = """## Sensitivity runs (single LightGBM, for the notes only – not used for choosing the model)
+See rows S0–S5 in "What was tried" (val = September, test = October, fit on data ≤ Aug 31 / ≤ Sep 30):
+* Without any European weather forecast (S1): September MAE +1.7, October +0.7 EUR – the JMA German wind and
+  temperature forecasts are worth keeping.
+* Without neighbour prices (S2): +0.5 / +1.3 EUR.
+* Without gas / CO₂ / FX (S3): +1.2 / +0.1 EUR (the CH price of day D already contains most of the fuel level).
+* ORACLE Zurich weather (S4, observed weather of the delivery day, not achievable): *worse* (15.0 vs 13.9 on
+  September). Training on observed weather before 2024 and on forecasts after makes the weather columns
+  inconsistent; perfect Zurich weather is not what limits the price forecast.
+* With the German TSO day-ahead wind/solar/load forecasts (S5, `unverified_de_*` – NOT allowed in the product,
+  because they may be published after 10:00): September −0.4 EUR, October +0.6 EUR. Their value is small and not
+  stable; the JMA wind forecast already carries most of the information.
+
+## Limitations
+* **Trends and spikes.** The model is anchored on day D, so in a month with a strong upward trend (October 2026:
+  +30 %) it is too low on average (bias −6.5 EUR/MWh) and it misses scarcity spikes (29 Oct evening, 451 EUR).
+  The 10–90 % band covers 87 % of October but its misses are almost all on the upper side.
+* **One validation month.** September has only 30 days; many choices differ by less than the seed noise. The CV and
+  the rolling backtest (Oct 2025 – Aug 2026) support the main choices, but the rolling backtest shows the best
+  model is NOT significantly better than the plain LightGBM there (DM p ≈ 0.3) – the big gain vs gbm in
+  September/October comes from months where the price level moves.
+* **Weather history.** Zurich weather is observed before 2024 and forecast after; ICON European weather exists only
+  from 2024 (left out), JMA has no radiation. Better European solar forecasts with a long history would help.
+* **No cross-border capacity data.** Several misses are days where CH decoupled from Germany (full interconnectors);
+  we have no capacity or flow forecasts.
+* **Importance is from the fixed models** (fit ≤ Aug 31 / ≤ Sep 30), not from the weekly walk-forward refits that
+  produce `pred_best`; the drivers are the same, the numbers slightly differ.
 """
 
 

@@ -1192,13 +1192,13 @@ def summarise(daily: pd.DataFrame, n_boot: int = 1000, seed: int | None = None) 
             r["saving_vs_baseline_chf"] = tot.get(BASELINE, np.nan) - r["total_cost_chf"]
             r["saving_vs_baseline_adj_chf"] = c1 - adj[s]
             if BASELINE in piv and s in piv:
-                pp = piv[[BASELINE, s]].dropna()
+                ok = piv[BASELINE].notna() & piv[s].notna()
+                cb, cs = piv.loc[ok, BASELINE].to_numpy(), piv.loc[ok, s].to_numpy()
                 shift = inv[s][1] - inv.get(BASELINE, (0, 0.0))[1]
-                r["saving_ci_low_chf"], r["saving_ci_high_chf"] = paired_bootstrap_ci(
-                    pp[BASELINE], pp[s], n_boot, seed)
+                r["saving_ci_low_chf"], r["saving_ci_high_chf"] = paired_bootstrap_ci(cb, cs, n_boot, seed)
                 r["saving_adj_ci_low_chf"], r["saving_adj_ci_high_chf"] = paired_bootstrap_ci(
-                    pp[BASELINE], pp[s], n_boot, seed, shift=shift)
-                r["days_cheaper_than_baseline"] = int(((pp[BASELINE] - pp[s]) > 0.005).sum())
+                    cb, cs, n_boot, seed, shift=shift)
+                r["days_cheaper_than_baseline"] = int(((cb - cs) > 0.005).sum())
             den = c1 - c6
             r["pct_perfect_captured"] = 100 * r["saving_vs_baseline_adj_chf"] / den if abs(den) > 1e-9 else np.nan
             den5 = c1 - c5
@@ -1350,7 +1350,7 @@ def main(argv=None) -> None:
     load_forecasts(args.require_ml)  # raises with --require-ml if files are missing
     source = forecast_source()
     sources = forecast_sources()
-    tag = "" if source == "ml" else f" [price: {sources['price'].upper()}]" if sources["demand"] == "ml" else " [STAND-IN forecasts]"
+    tag = "" if source == "ml" else " [price: STAND-IN]" if sources["demand"] == "ml" else " [STAND-IN forecasts]"
     print(f"Forecast source: {source_text()}")
     REPORTS.mkdir(exist_ok=True)
     FIGURES.mkdir(parents=True, exist_ok=True)
