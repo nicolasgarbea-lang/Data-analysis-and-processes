@@ -13,6 +13,7 @@ periods:
   val_end: "2026-09-30"
   test_start: "2026-10-01"
   test_end: "2026-10-31"
+  rolling_start: "2025-10-01"   # first day of the rolling-origin forecast period (backtest + tuning)
   # optional second test month (winter); models are retrained on data before it
   test2_start: "2026-01-01"
   test2_end: "2026-01-31"
@@ -38,6 +39,13 @@ battery:
 
 bidding:
   charge_limit_factor: 0.9       # limit price = expected discharge price * factor - wear cost
+  min_spread_eur_mwh: 0.0        # extra margin per MWh discharged the expected spread must cover (plan only)
+  plan_resolution: block         # block = plan the 6 blocks; hourly_shape = plan 24 h with a last-week hourly price shape
+  shape_days: 7                  # days used for the hourly price shape (hourly_shape only)
+  shape_daytype: false           # true = shape from the last days of the same day type (workday / weekend+holiday)
+  use_limit: true                # false = charge bids are price-independent
+  limit_rule: factor             # factor | quantile (quantile needs pred_q90 in the price predictions)
+  protect: none                  # none | at_risk_bid (extra price-independent bid for discharge that needs an uncleared charge)
 
 imbalance:
   shortage_price_factor: 1.2     # missing energy is bought at actual price * 1.2

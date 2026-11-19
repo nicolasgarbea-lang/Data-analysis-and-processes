@@ -8,26 +8,26 @@ D−1, i.e. two days before delivery.
 two days earlier* (log ratio), five LightGBM runs with different seeds are averaged and blended 85 / 15 with a
 ridge regression that learns the same ratio. Settings: `{"transform": "logratio", "reference_col": "demand_lag_2d_same_block", "weather": "hybrid", "extra_features": ["temp_vs_lag2", "rad_vs_lag2"], "drop_features": [], "gbm_params": {"learning_rate": 0.03, "n_estimators": 1500, "num_leaves": 31, "min_child_samples": 20, "subsample": 0.8, "subsample_freq": 1, "colsample_bytree": 0.7, "reg_lambda": 0.0}, "n_seeds": 5, "objective": "l2", "linear_weight": 0.15, "linear_alpha": 10.0, "half_life_years": null, "forecast_row_weight": 1.0, "covid_weight": 1.0, "walk_forward": false, "quantiles": [0.1, 0.5, 0.9], "quantile_params": {"learning_rate": 0.03, "n_estimators": 600, "num_leaves": 15, "min_child_samples": 40, "subsample": 0.8, "subsample_freq": 1, "colsample_bytree": 0.7}}`
 
-## Validation (September 2026, models fit on data ≤ 31 Aug 2026)
+## Validation (September 2026, models fit on data ≤ 30 Aug 2026)
 
 | model   |   mae |   rmse |   mape_% |   bias |   mae_ci_low |   mae_ci_high |   skill_vs_naive_% |
 |:--------|------:|-------:|---------:|-------:|-------------:|--------------:|-------------------:|
 | naive   |  9.03 |  11.86 |     3.03 |   1.99 |         7.20 |         11.01 |               0.00 |
-| linear  |  4.78 |   6.47 |     1.63 |   2.51 |         3.84 |          5.93 |              47.06 |
-| rf      |  5.81 |   7.71 |     1.98 |   3.13 |         4.75 |          6.99 |              35.71 |
-| gbm     |  3.93 |   4.91 |     1.37 |  -0.82 |         3.51 |          4.45 |              56.46 |
-| best    |  3.20 |   4.31 |     1.08 |   0.08 |         2.77 |          3.75 |              64.55 |
+| linear  |  4.78 |   6.47 |     1.63 |   2.50 |         3.85 |          5.93 |              47.07 |
+| rf      |  5.74 |   7.57 |     1.96 |   2.98 |         4.71 |          6.96 |              36.45 |
+| gbm     |  3.80 |   4.81 |     1.32 |  -1.16 |         3.38 |          4.31 |              57.94 |
+| best    |  3.24 |   4.32 |     1.09 |  -0.07 |         2.82 |          3.78 |              64.16 |
 
 
-## Test (October 2026, refit on data ≤ 30 Sep 2026, evaluated once)
+## Test (October 2026, refit on data ≤ 29 Sep 2026)
 
 | model   |   mae |   rmse |   mape_% |   bias |   mae_ci_low |   mae_ci_high |   skill_vs_naive_% |
 |:--------|------:|-------:|---------:|-------:|-------------:|--------------:|-------------------:|
 | naive   |  9.58 |  13.50 |     3.13 |  -4.17 |         7.36 |         12.23 |               0.00 |
 | linear  |  4.54 |   6.00 |     1.51 |   0.64 |         3.81 |          5.28 |              52.59 |
-| rf      |  5.79 |   7.98 |     1.92 |  -1.62 |         4.87 |          6.91 |              39.56 |
-| gbm     |  4.08 |   5.53 |     1.35 |   0.31 |         3.50 |          4.73 |              57.41 |
-| best    |  3.36 |   4.64 |     1.12 |   0.48 |         2.92 |          3.90 |              64.91 |
+| rf      |  5.87 |   8.15 |     1.94 |  -1.69 |         4.92 |          7.03 |              38.70 |
+| gbm     |  4.15 |   5.55 |     1.37 |   0.37 |         3.61 |          4.76 |              56.67 |
+| best    |  3.34 |   4.65 |     1.11 |   0.55 |         2.88 |          3.91 |              65.18 |
 
 
 95 % CI = day-clustered bootstrap (1000 draws of whole days).
@@ -36,12 +36,12 @@ ridge regression that learns the same ratio. Settings: `{"transform": "logratio"
 
 |   block |   best |   naive |
 |--------:|-------:|--------:|
-|       0 |   1.36 |    4.30 |
-|       1 |   1.73 |    6.04 |
-|       2 |   5.13 |   12.10 |
-|       3 |   4.70 |   13.70 |
-|       4 |   4.21 |   12.25 |
-|       5 |   3.04 |    9.10 |
+|       0 |   1.34 |    4.30 |
+|       1 |   1.64 |    6.04 |
+|       2 |   5.07 |   12.10 |
+|       3 |   4.60 |   13.70 |
+|       4 |   4.28 |   12.25 |
+|       5 |   3.07 |    9.10 |
 
 
 ## Rolling-origin backtest (Oct 2025 – Aug 2026, monthly refit)
@@ -59,10 +59,10 @@ ridge regression that learns the same ratio. Settings: `{"transform": "logratio"
 
 | split   | model_a   | model_b   |   mean_diff |   dm_stat |   p_value |   n_days |
 |:--------|:----------|:----------|------------:|----------:|----------:|---------:|
-| val     | best      | naive     |      -5.829 |    -4.738 |     0.000 |       30 |
-| val     | best      | gbm       |      -0.730 |    -3.927 |     0.000 |       30 |
-| test    | best      | naive     |      -6.219 |    -3.048 |     0.005 |       31 |
-| test    | best      | gbm       |      -0.718 |    -1.907 |     0.066 |       31 |
+| val     | best      | naive     |      -5.794 |    -4.768 |     0.000 |       30 |
+| val     | best      | gbm       |      -0.562 |    -3.212 |     0.003 |       30 |
+| test    | best      | naive     |      -6.245 |    -3.039 |     0.005 |       31 |
+| test    | best      | gbm       |      -0.816 |    -2.314 |     0.028 |       31 |
 | rolling | best      | naive     |     -10.408 |    -8.180 |     0.000 |      335 |
 | rolling | best      | gbm       |      -0.633 |    -3.157 |     0.002 |      335 |
 
@@ -72,8 +72,8 @@ ridge regression that learns the same ratio. Settings: `{"transform": "logratio"
 | split   |   inside_10_90 |   below_q10 |   above_q90 |   mean_width_mw |
 |:--------|---------------:|------------:|------------:|----------------:|
 | rolling |          0.729 |       0.133 |       0.138 |          19.443 |
-| test    |          0.785 |       0.075 |       0.140 |          15.021 |
-| val     |          0.756 |       0.183 |       0.061 |          15.376 |
+| test    |          0.806 |       0.054 |       0.140 |          15.715 |
+| val     |          0.778 |       0.161 |       0.061 |          15.900 |
 
 
 ## What was tried (September 2026 + 5-fold time-series CV on the training period)
@@ -135,7 +135,7 @@ Single LightGBM unless stated; `cv_mae` = mean over the 5 folds, `cv_mae_last2` 
   ratio (→ 3.20) helped; 30 % ridge was slightly worse (3.22). One-seed LightGBM results move by about ±0.1 MW
   between seeds, so smaller differences on September are noise.
 * **Daily walk-forward refit:** on September 3.245 → 3.178 MW (1 seed + ridge). This gain is smaller than the seed
-  noise and makes `main()` about 30× slower for the test month, so the model is fit once (≤ 30 Sep) for October.
+  noise and makes `main()` about 30× slower for the test month, so the model is fit once (≤ 29 Sep) for October.
 * **Hyper-parameters:** an optuna search (TimeSeriesSplit 5 folds on the training period, 16 trials) did not
   beat the starting values (learning rate 0.03, 1500 trees, 31 leaves; CV 4.615 vs best other 4.628), so those
   were kept. Ladder ridge/RF/LightGBM settings were set with small CV grids.
@@ -172,41 +172,41 @@ Permutation importance on Sept + Oct 2026 (MAE increase in MW when a column, or 
 
 | feature                               |   mae_increase |   std |
 |:--------------------------------------|---------------:|------:|
-| past demand (all lags)                |         47.234 | 1.377 |
-| weekday / weekend                     |         12.284 | 1.159 |
-| holidays and school holidays          |          9.454 | 0.946 |
-| weather (forecast + past observed)    |          6.997 | 0.486 |
-| season (month, day of year, daylight) |          0.153 | 0.019 |
-| Swiss solar (lagged)                  |          0.027 | 0.012 |
-| EVs and charging                      |          0.001 | 0.001 |
+| past demand (all lags)                |         47.168 | 1.372 |
+| weekday / weekend                     |         12.329 | 1.149 |
+| holidays and school holidays          |          9.461 | 0.940 |
+| weather (forecast + past observed)    |          7.010 | 0.498 |
+| season (month, day of year, daylight) |          0.148 | 0.026 |
+| Swiss solar (lagged)                  |          0.013 | 0.013 |
+| EVs and charging                      |          0.002 | 0.001 |
 | COVID stringency                      |          0.000 | 0.000 |
-| events and football                   |         -0.015 | 0.004 |
+| events and football                   |         -0.012 | 0.003 |
 
 
 ### Top 20 single columns
 
 | feature                                |   mae_increase |   std |
 |:---------------------------------------|---------------:|------:|
-| demand_lag_2d_same_block               |         42.506 | 1.613 |
-| block                                  |          9.441 | 0.971 |
-| is_working_day                         |          8.933 | 0.396 |
-| weekday                                |          8.624 | 0.402 |
-| radiation_wm2                          |          5.782 | 0.447 |
-| demand_dm1_block_2                     |          4.667 | 0.468 |
-| radiation_obs_same_block_lag_2d        |          3.954 | 0.128 |
-| lag2d_is_weekend                       |          1.675 | 0.186 |
-| demand_mean_same_block_same_weekday_4w |          1.122 | 0.025 |
-| heating_degree                         |          0.494 | 0.061 |
-| temp_change_fc_vs_dm1                  |          0.466 | 0.056 |
-| temp_c                                 |          0.432 | 0.045 |
-| temp_obs_same_block_lag_2d             |          0.432 | 0.042 |
-| temp_c_sq                              |          0.241 | 0.021 |
-| temp_obs_mean_last_3d                  |          0.227 | 0.057 |
-| demand_day_min_lag_2d                  |          0.177 | 0.030 |
-| humidity_pct                           |          0.161 | 0.014 |
-| demand_lag_8d_same_block               |          0.154 | 0.067 |
-| temp_obs_mean_last_7d                  |          0.154 | 0.007 |
-| demand_lag_7d_same_block               |          0.138 | 0.044 |
+| demand_lag_2d_same_block               |         42.507 | 1.619 |
+| block                                  |          9.408 | 0.961 |
+| is_working_day                         |          8.929 | 0.399 |
+| weekday                                |          8.596 | 0.411 |
+| radiation_wm2                          |          5.825 | 0.439 |
+| demand_dm1_block_2                     |          4.672 | 0.456 |
+| radiation_obs_same_block_lag_2d        |          4.058 | 0.146 |
+| lag2d_is_weekend                       |          1.734 | 0.190 |
+| demand_mean_same_block_same_weekday_4w |          1.100 | 0.027 |
+| heating_degree                         |          0.471 | 0.063 |
+| temp_change_fc_vs_dm1                  |          0.470 | 0.060 |
+| temp_c                                 |          0.441 | 0.047 |
+| temp_obs_same_block_lag_2d             |          0.436 | 0.043 |
+| temp_c_sq                              |          0.246 | 0.019 |
+| temp_obs_mean_last_3d                  |          0.239 | 0.055 |
+| demand_day_min_lag_2d                  |          0.179 | 0.028 |
+| demand_lag_8d_same_block               |          0.179 | 0.070 |
+| humidity_pct                           |          0.155 | 0.014 |
+| temp_obs_mean_last_7d                  |          0.148 | 0.008 |
+| demand_lag_7d_same_block               |          0.146 | 0.044 |
 
 
 ## Top-10 drivers (single columns, permutation importance on Sept + Oct 2026)
@@ -251,16 +251,16 @@ Permutation importance on Sept + Oct 2026 (MAE increase in MW when a column, or 
   the last ~2.7 years use real ICON forecasts. The model therefore may trust the weather a little too much. The
   test months use real forecasts, so the reported test errors are honest.
 * **Short test months:** one month = 30–31 days, so the 95 % CI of the test MAE is about ±0.5 MW. The DM test of
-  best vs plain LightGBM is significant on September and in the 11-month rolling backtest, but only borderline
-  on October alone (p ≈ 0.07).
+  best vs plain LightGBM is significant on September, on October (p ≈ 0.03) and in the 11-month rolling
+  backtest.
 * **Prediction band:** the 10–90 % band contains 73–78 % of the actuals instead of 80 % - slightly too narrow.
-* **Refit dates:** as fixed by the protocol, the validation/test models are fit on data up to 31 Aug / 30 Sep,
-  although on the forecast day the very last of these days would not be known yet (one row of six in ~2900
-  days, no practical effect). The rolling backtest and the walk-forward experiment use the strict rule (≤ T−2).
+* **Refit dates:** the validation and test models are fit on data up to 30 Aug / 29 Sep, the last day whose
+  demand is known when the first forecast of the month is made. (An earlier version used 31 Aug / 30 Sep; an
+  independent review flagged it. The fix moved the October error from 3.36 to 3.34 MW.)
 * **Days after holidays, Christmas and half-holidays** are the weakest cases (see table above).
 * **Importance:** permutation importance splits the credit between related columns (e.g. `weekday`,
   `is_working_day`, `is_weekend`), so single numbers should be read together with the group table.
 
 
 
-_`main()` runtime of this run: 9.9 min._
+_`main()` runtime of this run: 8.3 min._

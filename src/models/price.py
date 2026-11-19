@@ -24,6 +24,7 @@ import json
 import time
 
 import joblib
+from joblib import Parallel, delayed
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
@@ -41,7 +42,7 @@ from src.models.common import (
     metrics_long, permutation_importance_df, plot_error_by_block, plot_forecast_vs_actual, plot_importance,
     plot_model_ladder, rmse, smape, split_frame,
 )
-from src.models.price_common import AsinhTarget, PriceExtras
+from src.models.price_common import AsinhTarget, DayShapeTarget, PriceExtras, ScaledQuantile
 
 TARGET = fs.TARGET_PRICE
 NAIVE_COL = "price_lag_7d_same_block"
@@ -49,6 +50,7 @@ TARGET_LAG_DAYS = 1          # forecasting delivery day T: the latest known pric
 LADDER = ["naive", "linear", "rf", "gbm"]
 MODELS = LADDER + ["best"]
 PARAMS_FILE = "price_best_params.json"
+N_PROCESSES = 5              # parallel model fits (walk-forward chunks, rolling months)
 BLOCK_LABELS = ["00–04", "04–08", "08–12", "12–16", "16–20", "20–24"]
 
 # ---- feature groups (sensitivity runs and group importance) ----
@@ -96,11 +98,13 @@ DEFAULT_PARAMS = {
         "huber_alpha": 20.0,
         "half_life_years": 1.0,
         "start_date": None,
-        "linear_weight": 0.0,
+        "linear_weight": 0.35,
         "linear_alpha": 30.0,
         "linear_windows_years": [None],
-        "walk_forward": False,
+        "walk_forward": True,
+        "refit_every_days": 7,
         "quantiles": [0.1, 0.5, 0.9],
+        "band_factor": 1.3,
         "quantile_params": {"learning_rate": 0.03, "n_estimators": 600, "num_leaves": 15,
                             "min_child_samples": 40, "subsample": 0.8, "subsample_freq": 1,
                             "colsample_bytree": 0.5},
@@ -161,7 +165,9 @@ def sample_weights(d: pd.DataFrame, cfg: dict) -> np.ndarray:
 def make_lgbm(params: dict, seed: int, objective: str = "l2", alpha: float | None = None):
     p = dict(params)
     p.setdefault("subsample_freq", 1)
-    kw = {"objective": objective, "random_state": seed, "verbose": -1, "n_jobs": 8, "deterministic": True,
+    # 2 threads is the fastest setting for this small table; speed comes from fitting several models in
+    # parallel processes instead (see `N_PROCESSES`)
+    kw = {"objective": objective, "random_state": seed, "verbose": -1, "n_jobs": 2, "deterministic": True,
           "force_row_wise": True}
     if alpha is not None:
         kw["alpha"] = alpha
@@ -192,7 +198,7 @@ def fit_ladder(train: pd.DataFrame, params: dict) -> dict:
     lin_cols, lin_num = linear_columns(feats, onehot)
     lin = make_linear(params["linear_ladder"]["alpha"], lin_cols, lin_num, onehot).fit(train, y)
     rf = Pipeline([("select", ColumnSelect(feats)), ("impute", SimpleImputer(strategy="median")),
-                   ("rf", RandomForestRegressor(random_state=seed, n_jobs=-1, **params["rf_ladder"]))])
+                   ("rf", RandomForestRegressor(random_state=seed, n_jobs=2, **params["rf_ladder"]))])
     rf.fit(train, y)
     gbm = Pipeline([("select", ColumnSelect(feats)), ("gbm", make_lgbm(params["gbm_ladder"], seed))])
     gbm.fit(train, y)
@@ -238,13 +244,23 @@ def fit_best(train: pd.DataFrame, params: dict, cfg: dict | None = None, quantil
     lw = float(cfg.get("linear_weight", 0.0))
     obj = cfg.get("objective", "l2")
     alpha = cfg.get("huber_alpha") if obj == "huber" else None
+    transforms = []
     for k in range(n_seeds):
-        m = _wrap(Pipeline([("select", ColumnSelect(feats)),
-                            ("gbm", make_lgbm(cfg["gbm_params"], seed + k, obj, alpha))]), cfg)
-        if isinstance(m, AsinhTarget):
-            m.fit(d, y, sample_weight=w)
+        if cfg.get("two_stage"):
+            # day-mean change vs day D + within-day shape, each learnt by its own LightGBM
+            m = DayShapeTarget(*[Pipeline([("select", ColumnSelect(feats)),
+                                           ("gbm", make_lgbm(cfg["gbm_params"], seed + k + j, obj, alpha))])
+                                 for j in (0, 100)])
+            m.fit(d, y, sample_weight=w, day_key=d["delivery_date"].to_numpy())
+            transforms.append("level")
         else:
-            m.fit(d, z, gbm__sample_weight=w)
+            m = _wrap(Pipeline([("select", ColumnSelect(feats)),
+                                ("gbm", make_lgbm(cfg["gbm_params"], seed + k, obj, alpha))]), cfg)
+            if isinstance(m, AsinhTarget):
+                m.fit(d, y, sample_weight=w)
+            else:
+                m.fit(d, z, gbm__sample_weight=w)
+            transforms.append(fm_transform)
         estimators.append(m)
         weights.append((1 - lw) / n_seeds)
     all_cols = list(feats)
@@ -262,6 +278,7 @@ def fit_best(train: pd.DataFrame, params: dict, cfg: dict | None = None, quantil
             else:
                 lin.fit(dd, zz, ridge__sample_weight=ww)
             estimators.append(lin)
+            transforms.append(fm_transform)
             weights.append(lw / len(windows))
         all_cols += lin_cols
     qmodels = {}
@@ -274,12 +291,16 @@ def fit_best(train: pd.DataFrame, params: dict, cfg: dict | None = None, quantil
             else:
                 m.fit(d, z, gbm__sample_weight=w)
             qmodels[q] = m
+        k = float(cfg.get("band_factor", 1.0))
+        if k != 1.0 and 0.5 in qmodels:
+            med = qmodels[0.5]
+            qmodels = {q: (m if q == 0.5 else ScaledQuantile(m, med, k)) for q, m in qmodels.items()}
     # the model reads the prepared frame; ForecastModel._X selects `features`, so the reference and
     # every column a linear part needs must be in that list
     if ref_col and ref_col not in all_cols:
         all_cols.append(ref_col)
     return ForecastModel(
-        TARGET, list(dict.fromkeys(all_cols)), estimators, weights=weights, transforms=[fm_transform] * len(estimators),
+        TARGET, list(dict.fromkeys(all_cols)), estimators, weights=weights, transforms=transforms,
         reference_col=ref_col if fm_transform == "diff" else None, weather_map=wmap, quantiles=qmodels,
         quantile_transform=fm_transform, preprocess=pre,
         info={"trained_until": str(d["delivery_date"].max().date()), "config": cfg},
@@ -311,36 +332,48 @@ def predict_frame(rows: pd.DataFrame, ladder: dict, best: ForecastModel | None, 
 
 def walk_forward_best(df: pd.DataFrame, days, params: dict, cfg: dict | None = None,
                       quantiles: bool = False) -> pd.DataFrame:
-    """Refit the best model every day: for delivery day T use only rows ≤ T−1 (prices known at the
-    forecast time on day D = T−1). Returns a frame with pred_best (and quantiles if asked)."""
-    parts = []
-    for day in days:
-        day = pd.Timestamp(day)
-        tr = df[df["delivery_date"] <= day - pd.Timedelta(days=TARGET_LAG_DAYS)]
-        rows = df[df["delivery_date"] == day]
-        m = fit_best(tr, params, cfg, quantiles=quantiles)
-        p = rows[["delivery_date", "block"]].copy()
-        p["pred_best"] = m.predict(rows)
-        if quantiles and m.quantiles:
-            p = pd.concat([p, m.predict_quantiles(rows).set_axis(p.index)], axis=1)
-        parts.append(p)
+    """Refit the best model during the month: a model refit on day R uses only rows ≤ R−1 (prices known
+    at the forecast time for delivery day R) and forecasts R, R+1, … until the next refit
+    (`refit_every_days`, 1 = every day). Returns a frame with pred_best (and quantiles if asked)."""
+    cfg = cfg or params["best"]
+    every = int(cfg.get("refit_every_days", 1) or 1)
+    days = [pd.Timestamp(x) for x in sorted(days)]
+    chunks = [days[i:i + every] for i in range(0, len(days), every)]
+    parts = Parallel(n_jobs=min(N_PROCESSES, len(chunks)))(
+        delayed(_walk_forward_chunk)(df, chunk, params, cfg, quantiles) for chunk in chunks)
     return pd.concat(parts)
+
+
+def _walk_forward_chunk(df, chunk, params, cfg, quantiles):
+    """One refit of the walk-forward: fit on rows ≤ first day − 1, forecast all days of the chunk."""
+    tr = df[df["delivery_date"] <= chunk[0] - pd.Timedelta(days=TARGET_LAG_DAYS)]
+    rows = df[df["delivery_date"].isin(chunk)]
+    m = fit_best(tr, params, cfg, quantiles=quantiles)
+    p = rows[["delivery_date", "block"]].copy()
+    p["pred_best"] = m.predict(rows)
+    if quantiles and m.quantiles:
+        p = pd.concat([p, m.predict_quantiles(rows).set_axis(p.index)], axis=1)
+    return p
 
 
 def rolling_backtest(df: pd.DataFrame, params: dict, start="2025-10-01", end="2026-08-31") -> pd.DataFrame:
     """Frozen configuration refit at the start of each month on all rows known then (≤ start − 1 day),
     predicting that month. Split label "rolling"."""
-    parts = []
-    for m0 in pd.date_range(start, end, freq="MS"):
-        m1 = m0 + pd.offsets.MonthEnd(0)
-        tr = df[df["delivery_date"] <= m0 - pd.Timedelta(days=TARGET_LAG_DAYS)]
-        rows = df[(df["delivery_date"] >= m0) & (df["delivery_date"] <= min(m1, pd.Timestamp(end)))]
-        rows = rows[rows[TARGET].notna()]
-        ladder = fit_ladder(tr, params)
-        best = fit_best(tr, params, quantiles=True)
-        parts.append(predict_frame(rows, ladder, best, "rolling"))
-        print(f"  rolling {m0:%Y-%m}: best MAE {mae(parts[-1]['y_true'], parts[-1]['pred_best']):.2f}", flush=True)
+    months = list(pd.date_range(start, end, freq="MS"))
+    parts = Parallel(n_jobs=min(N_PROCESSES, len(months)))(
+        delayed(_rolling_month)(df, m0, params, end) for m0 in months)
+    for m0, p in zip(months, parts):
+        print(f"  rolling {m0:%Y-%m}: best MAE {mae(p['y_true'], p['pred_best']):.2f}", flush=True)
     return pd.concat(parts, ignore_index=True)
+
+
+def _rolling_month(df, m0, params, end):
+    """Fit ladder + best on rows ≤ m0 − 1 day and predict the month starting at m0."""
+    m1 = m0 + pd.offsets.MonthEnd(0)
+    tr = df[df["delivery_date"] <= m0 - pd.Timedelta(days=TARGET_LAG_DAYS)]
+    rows = df[(df["delivery_date"] >= m0) & (df["delivery_date"] <= min(m1, pd.Timestamp(end)))]
+    rows = rows[rows[TARGET].notna()]
+    return predict_frame(rows, fit_ladder(tr, params), fit_best(tr, params, quantiles=True), "rolling")
 
 
 # ----------------------------------------------------------------------------------------------
@@ -500,11 +533,11 @@ def _cv_days(train_df: pd.DataFrame, n_splits: int = 5):
 def cv_score(train_df: pd.DataFrame, fit_predict, n_splits: int = 5) -> list[float]:
     """MAE per TimeSeriesSplit fold (folds made of whole days). `fit_predict(tr, te) -> preds`."""
     train_df = train_df[train_df[TARGET].notna()]
-    out = []
-    for a, b in _cv_days(train_df, n_splits):
+
+    def one(a, b):
         tr, te = train_df[train_df["delivery_date"].isin(a)], train_df[train_df["delivery_date"].isin(b)]
-        out.append(mae(te[TARGET], fit_predict(tr, te)))
-    return out
+        return mae(te[TARGET], fit_predict(tr, te))
+    return Parallel(n_jobs=n_splits, prefer="threads")(delayed(one)(a, b) for a, b in _cv_days(train_df, n_splits))
 
 
 def tune(df: pd.DataFrame, params: dict, n_trials: int = 25) -> dict:
@@ -627,17 +660,20 @@ def _variants(df, params, base, one, run, record, tr, va):
     run("D4 without Zurich demand lags", dict(one, drop_features=DEMAND_COLS), "features")
     run("E1 3 seeds", dict(one, n_seeds=3), "ensemble", with_cv=False)
     for lw in (0.2, 0.35, 0.5):
-        run(f"E2 3 seeds + LEAR ridge {int(lw * 100)} %", dict(one, n_seeds=3, linear_weight=lw,
-                                                               linear_windows_years=[None, 2, 1]),
-            "ensemble", with_cv=False)
-    run("E3 LEAR ridge alone (3 windows)", dict(one, n_seeds=1, linear_weight=1.0, linear_windows_years=[None, 2, 1]),
-        "ensemble")
-    # walk-forward on September
-    wf_cfg = dict(base, n_seeds=1, quantiles=[])
-    p = walk_forward_best(df, sorted(va["delivery_date"].unique()), params, wf_cfg)["pred_best"].to_numpy()
-    st = fit_best(tr, params, wf_cfg, quantiles=False).predict(va)
-    record("G0 best config (1 seed), fit once", "walk-forward", st)
-    record("G1 best config (1 seed), daily walk-forward refit", "walk-forward", p)
+        run(f"E2 3 seeds + LEAR ridge {int(lw * 100)} %", dict(one, n_seeds=3, linear_weight=lw), "ensemble",
+            with_cv=False)
+    run("E3 3 seeds + ridge 35 %, ridge averaged over 3 windows (all, 2 y, 1 y)",
+        dict(one, n_seeds=3, linear_weight=0.35, linear_windows_years=[None, 2, 1]), "ensemble", with_cv=False)
+    run("E4 LEAR ridge alone", dict(one, n_seeds=0, linear_weight=1.0), "ensemble")
+    run("E5 two-stage: day-mean change + within-day shape (2 LightGBMs)", dict(one, two_stage=True), "target")
+    # refits during the month, with the final configuration
+    days = sorted(va["delivery_date"].unique())
+    st = fit_best(tr, params, dict(base, quantiles=[]), quantiles=False).predict(va)
+    record("G0 final config, fit once on train", "walk-forward", st)
+    for every, label in [(7, "weekly"), (1, "daily")]:
+        cfg = dict(base, refit_every_days=every, quantiles=[])
+        p = walk_forward_best(df, days, params, cfg)["pred_best"].to_numpy()
+        record(f"G{1 if every == 7 else 2} final config, {label} walk-forward refit", "walk-forward", p)
 
 
 def _sensitivity(one, run):
@@ -770,19 +806,20 @@ def main(argv=None):
     va, te = split_frame(df, "val"), split_frame(df, "test")
     va, te = va[va[TARGET].notna()], te[te[TARGET].notna()]
 
-    print("validation: fit on train ...", flush=True)
-    lad_tr, best_tr = train(df, p_dates["train_end"], params)
+    print("fit on train (for validation) and on train + validation (for test) ...", flush=True)
+    (lad_tr, best_tr), (lad_tv, best_tv) = Parallel(n_jobs=2)(
+        delayed(train)(df, p_dates[k], params) for k in ["train_end", "val_end"])
     pv = predict_frame(va, lad_tr, best_tr, "val")
-    if cfg.get("walk_forward"):
-        wf = walk_forward_best(df, sorted(va["delivery_date"].unique()), params, quantiles=False)
-        pv["pred_best"] = wf["pred_best"].to_numpy()
-
-    print("test: refit on train + validation ...", flush=True)
-    lad_tv, best_tv = train(df, p_dates["val_end"], params)
     pt = predict_frame(te, lad_tv, best_tv, "test")
     if cfg.get("walk_forward"):
-        wf = walk_forward_best(df, sorted(te["delivery_date"].unique()), params, quantiles=False)
-        pt["pred_best"] = wf["pred_best"].to_numpy()
+        # best model refit during the month (only prices known at forecast time); the ladder stays static
+        print("walk-forward refits for September and October ...", flush=True)
+        for frame, rows in [(pv, va), (pt, te)]:
+            wf = walk_forward_best(df, sorted(rows["delivery_date"].unique()), params, quantiles=True)
+            wf = frame[["delivery_date", "block"]].merge(wf, on=["delivery_date", "block"], how="left")
+            for c in ["pred_best", "pred_q10", "pred_q50", "pred_q90"]:
+                if c in wf.columns:
+                    frame[c] = wf[c].to_numpy()
 
     parts = [pv, pt]
     if not args.skip_rolling:

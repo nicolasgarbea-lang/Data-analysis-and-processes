@@ -130,3 +130,20 @@ def _kw(est, kw):
     if steps and kw:
         return {f"{steps[-1][0]}__sample_weight": kw["sample_weight"]}
     return kw
+
+
+class ScaledQuantile:
+    """One quantile of a band that is widened (or narrowed) around the median:
+    q_scaled = q50 + factor × (q − q50). Both estimators predict on the same (transformed) scale.
+
+    The factor is chosen on the validation month so that ~80 % of actual prices fall inside the
+    10–90 % band (quantile LightGBM bands are usually too narrow when prices trend)."""
+
+    def __init__(self, est_q, est_median, factor: float = 1.0):
+        self.est_q = est_q
+        self.est_median = est_median
+        self.factor = factor
+
+    def predict(self, X) -> np.ndarray:
+        m = np.asarray(self.est_median.predict(X), float)
+        return m + self.factor * (np.asarray(self.est_q.predict(X), float) - m)

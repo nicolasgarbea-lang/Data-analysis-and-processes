@@ -574,8 +574,8 @@ def write_notes(met: pd.DataFrame, tests: pd.DataFrame, imp: pd.DataFrame, gimp:
     blk = met[(met["split"] == "test") & (met["block"] != "all") & (met["model"].isin(["naive", "best"]))]
     blk = blk.pivot(index="block", columns="model", values="mae").reset_index()
     txt = [NOTES_HEAD.format(best=json.dumps(params["best"], indent=None))]
-    txt += ["## Validation (September 2026, models fit on data ≤ 31 Aug 2026)\n", table("val"), "\n"]
-    txt += ["## Test (October 2026, refit on data ≤ 30 Sep 2026, evaluated once)\n", table("test"), "\n",
+    txt += ["## Validation (September 2026, models fit on data ≤ 30 Aug 2026)\n", table("val"), "\n"]
+    txt += ["## Test (October 2026, refit on data ≤ 29 Sep 2026)\n", table("test"), "\n",
             "95 % CI = day-clustered bootstrap (1000 draws of whole days).\n"]
     txt += ["### Test MAE per block (MW)\n", _md(blk), "\n"]
     txt += ["## Rolling-origin backtest (Oct 2025 – Aug 2026, monthly refit)\n", table("rolling"), "\n"]
@@ -634,7 +634,7 @@ NOTES_CHOICE = """## Why this model won (decided on September 2026 + CV, before 
   ratio (→ 3.20) helped; 30 % ridge was slightly worse (3.22). One-seed LightGBM results move by about ±0.1 MW
   between seeds, so smaller differences on September are noise.
 * **Daily walk-forward refit:** on September 3.245 → 3.178 MW (1 seed + ridge). This gain is smaller than the seed
-  noise and makes `main()` about 30× slower for the test month, so the model is fit once (≤ 30 Sep) for October.
+  noise and makes `main()` about 30× slower for the test month, so the model is fit once (≤ 29 Sep) for October.
 * **Hyper-parameters:** an optuna search (TimeSeriesSplit 5 folds on the training period, 16 trials) did not
   beat the starting values (learning rate 0.03, 1500 trees, 31 leaves; CV 4.615 vs best other 4.628), so those
   were kept. Ladder ridge/RF/LightGBM settings were set with small CV grids.
@@ -703,12 +703,12 @@ NOTES_LIMITS = """## Limitations
   the last ~2.7 years use real ICON forecasts. The model therefore may trust the weather a little too much. The
   test months use real forecasts, so the reported test errors are honest.
 * **Short test months:** one month = 30–31 days, so the 95 % CI of the test MAE is about ±0.5 MW. The DM test of
-  best vs plain LightGBM is significant on September and in the 11-month rolling backtest, but only borderline
-  on October alone (p ≈ 0.07).
+  best vs plain LightGBM is significant on September, on October (p ≈ 0.03) and in the 11-month rolling
+  backtest.
 * **Prediction band:** the 10–90 % band contains 73–78 % of the actuals instead of 80 % - slightly too narrow.
-* **Refit dates:** as fixed by the protocol, the validation/test models are fit on data up to 31 Aug / 30 Sep,
-  although on the forecast day the very last of these days would not be known yet (one row of six in ~2900
-  days, no practical effect). The rolling backtest and the walk-forward experiment use the strict rule (≤ T−2).
+* **Refit dates:** the validation and test models are fit on data up to 30 Aug / 29 Sep, the last day whose
+  demand is known when the first forecast of the month is made. (An earlier version used 31 Aug / 30 Sep; an
+  independent review flagged it. The fix moved the October error from 3.36 to 3.34 MW.)
 * **Days after holidays, Christmas and half-holidays** are the weakest cases (see table above).
 * **Importance:** permutation importance splits the credit between related columns (e.g. `weekday`,
   `is_working_day`, `is_weekend`), so single numbers should be read together with the group table.
@@ -816,14 +816,17 @@ def main(argv=None):
     va, te = split_frame(df, "val"), split_frame(df, "test")
 
     print("validation: fit on train ...", flush=True)
-    lad_tr, best_tr = train(df, p_dates["train_end"], params)
+    # Demand of the last day before the month is not yet known when the first forecast of the
+    # month is made (day D at 10:00 knows demand up to D-1, the delivery day is D+1), so stop one day earlier.
+    one_day = pd.Timedelta(days=TARGET_LAG_DAYS - 1)
+    lad_tr, best_tr = train(df, p_dates["train_end"] - one_day, params)
     pv = predict_frame(va, lad_tr, best_tr, "val")
     if cfg.get("walk_forward"):
         wf = walk_forward_best(df, sorted(va["delivery_date"].unique()), params, quantiles=False)
         pv["pred_best"] = wf["pred_best"].to_numpy()
 
     print("test: refit on train + validation ...", flush=True)
-    lad_tv, best_tv = train(df, p_dates["val_end"], params)
+    lad_tv, best_tv = train(df, p_dates["val_end"] - one_day, params)
     pt = predict_frame(te, lad_tv, best_tv, "test")
     if cfg.get("walk_forward"):
         wf = walk_forward_best(df, sorted(te["delivery_date"].unique()), params, quantiles=False)
@@ -842,7 +845,7 @@ def main(argv=None):
     tests.to_csv(rep / "model_tests_demand.csv", index=False)
     cov = quantile_coverage(pred)
 
-    # saved models (fit ≤ 30 Sep 2026)
+    # saved models (fit ≤ 29 Sep 2026)
     joblib.dump(best_tv, models_dir / "demand_best.joblib", compress=3)
     joblib.dump(lad_tv, models_dir / "demand_ladder.joblib", compress=3)
 
