@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 840" width="1200" height="840" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="aPower" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+    <marker id="aData" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+    <marker id="aTrade" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+    <marker id="aPlan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/></marker>
+  </defs>
+
+  <rect width="1200" height="840" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="44" font-size="24" font-weight="700" fill="#0f172a">From TSO to DSO to homes: where our forecasting model sits</text>
+
+  <!-- ========== LEFT: the grid ========== -->
+  <!-- Generation -->
+  <rect x="40" y="80" width="700" height="80" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="60" y="110" font-size="17" font-weight="700" fill="#0f172a">Large producers and imports</text>
+  <text x="60" y="136" font-size="14" fill="#334155">Hydro dams, pumped storage, nuclear · imports from DE, FR, IT, AT</text>
+
+  <line x1="390" y1="160" x2="390" y2="198" stroke="#334155" stroke-width="2.5" marker-end="url(#aPower)"/>
+
+  <!-- TSO -->
+  <rect x="40" y="200" width="700" height="90" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="60" y="230" font-size="17" font-weight="700" fill="#0f172a">TSO: transmission system operator (Swissgrid)</text>
+  <text x="60" y="255" font-size="14" fill="#334155">Extra-high-voltage grid, 380 / 220 kV · balances the whole country</text>
+  <text x="60" y="276" font-size="14" fill="#334155">Manages cross-border flows with the neighbours</text>
+
+  <line x1="390" y1="290" x2="390" y2="338" stroke="#334155" stroke-width="2.5" marker-end="url(#aPower)"/>
+  <text x="402" y="320" font-size="12" fill="#64748b">substations</text>
+
+  <!-- DSO (focus) -->
+  <rect x="40" y="340" width="700" height="170" rx="12" fill="#ccfbf1" stroke="#0d9488" stroke-width="3"/>
+  <rect x="560" y="352" width="166" height="26" rx="13" fill="#0d9488"/>
+  <text x="643" y="370" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">OUR FOCUS</text>
+  <text x="60" y="372" font-size="18" font-weight="700" fill="#0f172a">DSO: distribution system operator (our user)</text>
+  <text x="60" y="400" font-size="14" fill="#134e4a">Municipal or regional utility (e.g. a Stadtwerk)</text>
+  <text x="60" y="424" font-size="14" fill="#134e4a">Runs the local grid, from 16 kV down to 0.4 kV</text>
+  <text x="60" y="448" font-size="14" fill="#134e4a">Buys energy every day for the homes and businesses it supplies</text>
+  <text x="60" y="472" font-size="14" fill="#134e4a">Owns a grid battery (10 MW / 20 MWh) and can sell energy back</text>
+  <text x="60" y="496" font-size="14" font-weight="600" fill="#0f766e">Needs to know: how much to buy, at what price, and when to sell</text>
+
+  <line x1="160" y1="510" x2="160" y2="578" stroke="#334155" stroke-width="2.5" marker-end="url(#aPower)"/>
+  <line x1="390" y1="510" x2="390" y2="578" stroke="#334155" stroke-width="2.5" marker-end="url(#aPower)"/>
+  <line x1="620" y1="510" x2="620" y2="578" stroke="#334155" stroke-width="2.5" marker-end="url(#aPower)"/>
+
+  <!-- Houses -->
+  <rect x="40" y="580" width="230" height="90" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="155" y="614" font-size="16" font-weight="700" fill="#0f172a" text-anchor="middle">Households</text>
+  <text x="155" y="640" font-size="13" fill="#475569" text-anchor="middle">Evening and winter peaks</text>
+
+  <rect x="275" y="580" width="230" height="90" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="390" y="614" font-size="16" font-weight="700" fill="#0f172a" text-anchor="middle">Homes with rooftop PV</text>
+  <text x="390" y="640" font-size="13" fill="#475569" text-anchor="middle">Feed midday surplus back</text>
+
+  <rect x="510" y="580" width="230" height="90" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="625" y="614" font-size="16" font-weight="700" fill="#0f172a" text-anchor="middle">Small businesses</text>
+  <text x="625" y="640" font-size="13" fill="#475569" text-anchor="middle">Daytime load on workdays</text>
+
+  <text x="390" y="695" font-size="13" fill="#64748b" text-anchor="middle">End customers · smart meters record their load every 15 minutes</text>
+
+  <!-- ========== RIGHT: market and model ========== -->
+  <!-- Market -->
+  <rect x="800" y="80" width="360" height="130" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="820" y="110" font-size="17" font-weight="700" fill="#0f172a">Day-ahead market (EPEX SPOT, CH)</text>
+  <text x="820" y="136" font-size="14" fill="#7c2d12">Auction closes on day D around noon</text>
+  <text x="820" y="158" font-size="14" fill="#7c2d12">Sets 24 hourly prices for day D+1</text>
+  <text x="820" y="180" font-size="14" fill="#7c2d12">Energy bought here is delivered</text>
+  <text x="820" y="199" font-size="14" fill="#7c2d12">through the TSO grid</text>
+
+  <!-- Model (forecasting) -->
+  <rect x="800" y="280" width="360" height="410" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="3"/>
+  <text x="820" y="310" font-size="18" font-weight="700" fill="#0f172a">Our forecasting model</text>
+  <text x="820" y="332" font-size="13" fill="#1e3a8a">Fine-tuned to this DSO's own load and prices</text>
+
+  <text x="820" y="366" font-size="14" font-weight="700" fill="#1e40af">Inputs (known on the morning of day D)</text>
+  <text x="832" y="388" font-size="13" fill="#1e293b">• Swiss, German, French prices (history)</text>
+  <text x="832" y="408" font-size="13" fill="#1e293b">• DSO load from smart meters</text>
+  <text x="832" y="428" font-size="13" fill="#1e293b">• Weather: temperature, sunshine</text>
+  <text x="832" y="448" font-size="13" fill="#1e293b">• Reservoir level, gas and CO₂ prices</text>
+  <text x="832" y="468" font-size="13" fill="#1e293b">• Calendar and Swiss holidays</text>
+
+  <line x1="980" y1="480" x2="980" y2="500" stroke="#2563eb" stroke-width="2" marker-end="url(#aData)"/>
+
+  <text x="820" y="522" font-size="14" font-weight="700" fill="#1e40af">Forecasts for the next days (D+1 … D+n)</text>
+  <text x="832" y="544" font-size="13" fill="#1e293b">• Demand: MWh for every hour</text>
+  <text x="832" y="564" font-size="13" fill="#1e293b">• Price: €/MWh for every hour</text>
+
+  <line x1="980" y1="576" x2="980" y2="596" stroke="#2563eb" stroke-width="2" marker-end="url(#aData)"/>
+
+  <text x="820" y="618" font-size="14" font-weight="700" fill="#1e40af">Decisions for the DSO</text>
+  <text x="832" y="640" font-size="13" fill="#1e293b">• How much energy to buy, and the bid price</text>
+  <text x="832" y="660" font-size="13" fill="#1e293b">• When to sell, and at what price</text>
+  <text x="844" y="678" font-size="12" fill="#475569">(battery discharge, surplus local PV)</text>
+
+  <!-- Arrows between market and model -->
+  <line x1="940" y1="280" x2="940" y2="213" stroke="#ea580c" stroke-width="2.5" marker-end="url(#aTrade)"/>
+  <text x="932" y="252" font-size="12" fill="#c2410c" text-anchor="end">bids: volume + price</text>
+  <line x1="1030" y1="211" x2="1030" y2="278" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#aData)"/>
+  <text x="1040" y="252" font-size="12" fill="#1d4ed8">published prices</text>
+
+  <!-- Model -> DSO plan -->
+  <line x1="800" y1="430" x2="743" y2="430" stroke="#0d9488" stroke-width="2.5" marker-end="url(#aPlan)"/>
+  <text x="771" y="420" font-size="12" fill="#0f766e" text-anchor="middle">plan</text>
+
+  <!-- Smart meter data -> model -->
+  <path d="M740,625 L770,625 L770,560 L798,560" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#aData)"/>
+  <text x="776" y="600" font-size="12" fill="#1d4ed8">load</text>
+
+  <!-- Market delivery via TSO -->
+  <path d="M800,190 L770,190 L770,245 L743,245" fill="none" stroke="#334155" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#aPower)"/>
+
+  <!-- Legend -->
+  <rect x="40" y="730" width="1120" height="70" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+  <line x1="64" y1="765" x2="114" y2="765" stroke="#334155" stroke-width="2.5" marker-end="url(#aPower)"/>
+  <text x="124" y="770" font-size="13" fill="#334155">Electricity flow</text>
+  <line x1="300" y1="765" x2="350" y2="765" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#aData)"/>
+  <text x="360" y="770" font-size="13" fill="#334155">Data into the model</text>
+  <line x1="560" y1="765" x2="610" y2="765" stroke="#ea580c" stroke-width="2.5" marker-end="url(#aTrade)"/>
+  <text x="620" y="770" font-size="13" fill="#334155">Bids to the market</text>
+  <line x1="810" y1="765" x2="860" y2="765" stroke="#0d9488" stroke-width="2.5" marker-end="url(#aPlan)"/>
+  <text x="870" y="770" font-size="13" fill="#334155">Buy / sell / battery plan to the DSO</text>
+
+  <text x="40" y="825" font-size="12" fill="#94a3b8">Business Analytics &amp; Data Science Applications, HSG HS 2026 · Group project: day-ahead planning for a Swiss DSO</text>
+</svg>
