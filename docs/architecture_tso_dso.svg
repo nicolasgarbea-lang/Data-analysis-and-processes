@@ -61,10 +61,10 @@
   <!-- ========== RIGHT: market and model ========== -->
   <!-- Market -->
   <rect x="800" y="80" width="360" height="130" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
-  <text x="820" y="110" font-size="17" font-weight="700" fill="#0f172a">Intraday market (EPEX SPOT, CH)</text>
-  <text x="820" y="136" font-size="14" fill="#7c2d12">Trading runs until shortly before delivery</text>
-  <text x="820" y="158" font-size="14" fill="#7c2d12">The DSO buys or sells the gap for the</text>
-  <text x="820" y="180" font-size="14" fill="#7c2d12">next 4 hours (day-ahead bought the base)</text>
+  <text x="820" y="110" font-size="17" font-weight="700" fill="#0f172a">Day-ahead market (EPEX SPOT, CH)</text>
+  <text x="820" y="136" font-size="14" fill="#7c2d12">Auction closes once a day, at 12:00</text>
+  <text x="820" y="158" font-size="14" fill="#7c2d12">Sets the prices for every hour of</text>
+  <text x="820" y="180" font-size="14" fill="#7c2d12">tomorrow (D+1)</text>
   <text x="820" y="199" font-size="14" fill="#7c2d12">Delivered through the TSO grid</text>
 
   <!-- Model (forecasting) -->
@@ -72,7 +72,7 @@
   <text x="820" y="310" font-size="18" font-weight="700" fill="#0f172a">Our forecasting model</text>
   <text x="820" y="332" font-size="13" fill="#1e3a8a">Fine-tuned to this DSO's own load and prices</text>
 
-  <text x="820" y="366" font-size="14" font-weight="700" fill="#1e40af">Inputs (known before each 4-hour block)</text>
+  <text x="820" y="366" font-size="14" font-weight="700" fill="#1e40af">Inputs (known on day D before 12:00)</text>
   <text x="832" y="388" font-size="13" fill="#1e293b">• Swiss, German, French prices (history)</text>
   <text x="832" y="408" font-size="13" fill="#1e293b">• DSO load from smart meters</text>
   <text x="832" y="428" font-size="13" fill="#1e293b">• Weather: temperature, sunshine</text>
@@ -81,12 +81,12 @@
 
   <line x1="980" y1="480" x2="980" y2="500" stroke="#2563eb" stroke-width="2" marker-end="url(#aData)"/>
 
-  <text x="820" y="522" font-size="14" font-weight="700" fill="#1e40af">Every 4 hours, for the next 4 hours</text>
-  <text x="832" y="544" font-size="13" fill="#1e293b">• Demand: MWh for the 4-hour block</text>
+  <text x="820" y="522" font-size="14" font-weight="700" fill="#1e40af">Every day at 11:00, for tomorrow</text>
+  <text x="832" y="544" font-size="13" fill="#1e293b">• Demand: MWh per 4-hour block of D+1</text>
   <text x="844" y="562" font-size="12" fill="#475569">e.g. EV charging, weather, rooftop solar,</text>
   <text x="844" y="578" font-size="12" fill="#475569">holidays, events such as festivals</text>
-  <text x="832" y="598" font-size="13" fill="#1e293b">• Price: €/MWh for the 4-hour block</text>
-  <text x="832" y="616" font-size="12" font-weight="600" fill="#1e40af">Tested over one month: 6 a day, ~186 in total</text>
+  <text x="832" y="598" font-size="13" fill="#1e293b">• Price: €/MWh per 4-hour block of D+1</text>
+  <text x="832" y="616" font-size="12" font-weight="600" fill="#1e40af">Tested over one month: 31 runs, 186 blocks</text>
 
   <line x1="980" y1="626" x2="980" y2="646" stroke="#2563eb" stroke-width="2" marker-end="url(#aData)"/>
 
@@ -123,5 +123,5 @@
   <line x1="810" y1="795" x2="860" y2="795" stroke="#0d9488" stroke-width="2.5" marker-end="url(#aPlan)"/>
   <text x="870" y="800" font-size="13" fill="#334155">Buy / sell / battery plan to the DSO</text>
 
-  <text x="40" y="858" font-size="12" fill="#94a3b8">Business Analytics &amp; Data Science Applications, HSG HS 2026 · Group project: 4-hour-ahead demand and price forecasting for a Swiss DSO</text>
+  <text x="40" y="858" font-size="12" fill="#94a3b8">Business Analytics &amp; Data Science Applications, HSG HS 2026 · Group project: day-ahead demand and price forecasting for a Swiss DSO</text>
 </svg>
