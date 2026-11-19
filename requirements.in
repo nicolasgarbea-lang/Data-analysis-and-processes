@@ -20,3 +20,5 @@ ipykernel
 statsmodels
 optuna
 kaleido
+curl_cffi
+xlrd
