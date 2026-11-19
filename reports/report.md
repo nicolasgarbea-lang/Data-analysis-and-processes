@@ -130,7 +130,7 @@ flowchart TD
 | Decision → auction purchase | Hourly bids: a price-independent bid for the city's demand, a limit-price bid for extra energy to store |
 | (new) Backtest | Settles every bid with the actual hourly prices and demand, adds imbalance and battery wear |
 
-The Streamlit app (`app/streamlit_app.py`) shows the same chain for any day of the test month.
+The web app (`web/`, built with Bun and TanStack) shows the same chain for any day of the test month.
 
 ---
 
@@ -918,7 +918,7 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m src.pipeline --all --skip-download # rebuild from data/raw/ without internet
 .venv/bin/python -m src.pipeline --features --models   # single steps: --data --features --models --backtest --metrics
 .venv/bin/python -m pytest                             # 159 tests (loaders, leakage, optimiser, bids, backtest, app)
-.venv/bin/streamlit run app/streamlit_app.py           # the app
+cd web && bun install && bun run start                 # the app (http://localhost:5173)
 .venv/bin/python reports/make_report_tables.py --check reports/report.md   # tables in this report = result files
 ```
 

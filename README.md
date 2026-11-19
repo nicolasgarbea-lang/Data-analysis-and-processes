@@ -43,7 +43,8 @@ src/backtest/              run_backtest.py, analysis.py – settlement, strategi
 src/pipeline.py            runs everything
 notebooks/                 01_eda, 02_demand_model, 03_price_model, 04_backtest
 models/                    trained models (joblib) and their settings (json)
-app/                       Streamlit app (see app/README.md)
+web/                       web app (Bun + TanStack Router, Query and Table; see web/README.md)
+api/                       small Python service the web app calls to re-plan with another battery
 tests/                     pytest suite (loaders, leakage, optimiser, bids, backtest, app)
 reports/                   report, metrics, predictions, backtest results, figures/, notes per step
 docs/                      data sources, assumptions, data dictionary, auction timing, review log, TSO/DSO picture
@@ -114,7 +115,8 @@ Tests (159 tests):
 App:
 
 ```bash
-.venv/bin/streamlit run app/streamlit_app.py      # then open http://localhost:8501
+.venv/bin/python -m src.export.export_web    # write the app's data files to web/public/data/
+cd web && bun install && bun run start        # web app + planning service, then open http://localhost:5173
 ```
 
 Report tables (check that every table in the report matches the result files):
@@ -142,11 +144,12 @@ research use. Processed series and feature columns derived from them are tracked
 series. The clean fix is to replace the gas (and, if needed, CO₂) series with an HSG LSEG/Bloomberg export and to
 rebuild; until then keep the repository private.
 
-## Deploy the app on Streamlit Community Cloud
+## Deploy the app
 
-Push the repo to GitHub (without `data/raw/`), then on share.streamlit.io create a new app with main file
-`app/streamlit_app.py` and Python 3.11. The app installs the slim `app/requirements.txt`. Step-by-step instructions
-and the list of files the app needs: [`app/README.md`](app/README.md).
+`cd web && bun run build` writes a static site to `web/dist/`. It can be put on any static file host (for example
+GitHub Pages) and shows every page except the live battery sliders, which need the Python planning service
+(`api/server.py`). Details: [`web/README.md`](web/README.md). An earlier version of the app was built with
+Streamlit; it was replaced by this web app and can still be found in the git history.
 
 ## Where the results are
 

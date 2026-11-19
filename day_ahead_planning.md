@@ -78,7 +78,7 @@ flowchart TD
     M --> O["4 · Optimal blend<br/>mixed-integer battery plan (SciPy/HiGHS)<br/>hourly price shape, 6-block decision table"]
     O --> B["5 · Hourly bids<br/>demand price-independent,<br/>charging as limit bids"]
     B --> E["6 · Backtest (CHF)<br/>actual prices and demand, imbalance 1.2 / 0.8,<br/>strategies 1–7, ceiling = perfect foresight hourly"]
-    E --> APP["7 · Streamlit app<br/>Tomorrow · Battery settings · Month backtest ·<br/>Drivers · Data and method"]
+    E --> APP["7 · Web app (Bun + TanStack)<br/>Tomorrow · Battery settings · Month backtest ·<br/>Drivers · Data and method"]
 ```
 
 ## 6. Key results (October 2026 test month)

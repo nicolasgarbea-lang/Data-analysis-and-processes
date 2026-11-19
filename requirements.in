@@ -8,8 +8,6 @@ scipy
 pulp
 holidays
 openpyxl
-streamlit
-plotly
 joblib
 pytest
 pyyaml
@@ -19,7 +17,9 @@ nbconvert
 ipykernel
 statsmodels
 optuna
-kaleido
 curl_cffi
 xlrd
 tabulate
+fastapi
+uvicorn
+httpx

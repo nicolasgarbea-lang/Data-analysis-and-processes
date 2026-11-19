@@ -12,6 +12,7 @@ data      download every source and write clean tables to data/processed/
 features  build the feature table (one row per delivery day and 4-hour block)
 models    train and evaluate the demand model and the price model
 backtest  plan, bid and settle every day of the validation and test month
+export    write the data files of the web app to web/public/data/
 metrics   merge the two metrics files into reports/metrics.csv and the data checks into reports/data_checks.md
 """
 from __future__ import annotations
@@ -79,6 +80,12 @@ def step_backtest() -> None:
     _run("backtest", run_backtest.main, ["--require-ml"])
 
 
+def step_export() -> None:
+    from src.export import export_web
+
+    _run("web app data", export_web.main, [])
+
+
 def step_metrics() -> None:
     """Merge per-target files into the single files named in the project brief."""
     reports = ROOT / "reports"
@@ -107,11 +114,12 @@ def main(argv=None) -> None:
     ap.add_argument("--features", action="store_true")
     ap.add_argument("--models", action="store_true")
     ap.add_argument("--backtest", action="store_true")
+    ap.add_argument("--export", action="store_true")
     ap.add_argument("--metrics", action="store_true")
     ap.add_argument("--skip-download", action="store_true",
                     help="do not touch the internet; rebuild from files already in data/raw/")
     a = ap.parse_args(argv)
-    if not (a.all or a.data or a.features or a.models or a.backtest or a.metrics):
+    if not (a.all or a.data or a.features or a.models or a.backtest or a.metrics or a.export):
         ap.error("choose --all or at least one step")
 
     t0 = time.time()
@@ -125,6 +133,8 @@ def main(argv=None) -> None:
         step_backtest()
     if a.all or a.metrics or a.models:
         step_metrics()
+    if a.all or a.export:
+        step_export()
     print(f"\nPipeline finished in {(time.time() - t0) / 60:.1f} min")
 
 

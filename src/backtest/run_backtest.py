@@ -20,7 +20,7 @@ Run it (from the repo root)::
     .venv/bin/python -m src.backtest.run_backtest --require-ml    # same, fail if a prediction file is missing
     .venv/bin/python -m src.backtest.run_backtest --start 2026-10-01 --end 2026-10-31
 
-Public API (used by the Streamlit app and the notebook)
+Public API (used by the web app's exporter and service, and the notebook)
 -------------------------------------------------------
 ``plan_day(delivery_date, strategy="ml_battery", battery=None, soc_start_mwh=None,
 decision=None, settle=True, ...)`` returns a dict:
