@@ -4,7 +4,7 @@ import type { DayPlan, Option } from "../data/types";
 import { dec1, int } from "../lib/format";
 import { niceTicks, useWidth } from "./base";
 
-const OPTION_WORDS: Record<Option, string> = {
+export const OPTION_WORDS: Record<Option, string> = {
   buy: "Buy",
   buy_and_store: "Buy and store",
   use_storage_and_buy: "Use storage and buy",
@@ -17,9 +17,10 @@ const OPTION_SHORT: Record<Option, string> = {
   use_storage: "Use storage",
 };
 
-const GUTTER = 148; // room for the strip names on the left
-const RIGHT = 20;
-const STRIPS = { axis: 26, tiles: 64, price: 118, battery: 104, level: 78, demand: 112 };
+type Strip = "tiles" | "price" | "battery";
+const HEIGHT: Record<Strip | "axis", number> = { axis: 26, tiles: 64, price: 128, battery: 112 };
+const GUTTER = 120;
+const RIGHT = 16;
 const GAP = 18;
 
 /** Step path through hourly values: each value holds for its whole hour. */
@@ -38,18 +39,18 @@ function stepPath(values: (number | null)[], x: (i: number) => number, y: (v: nu
 }
 
 /**
- * The day at a glance. Five strips share one time axis (the hours of the delivery day):
- * the decision per block, the price, what the battery does, how full it is, and what the city needs.
+ * The day at a glance. Three strips share one time axis (the hours of the delivery day):
+ * the decision per block, the price, and what the battery does each hour.
  * Forecasts are drawn in colour, what really happened in thin dark ink.
  */
-export function DayRail({ plan, showActual = true, compact = false }: { plan: DayPlan; showActual?: boolean; compact?: boolean }) {
+export function DayRail({ plan, showActual = true }: { plan: DayPlan; showActual?: boolean }) {
   const [ref, width] = useWidth<HTMLDivElement>(1100);
   const [hover, setHover] = useState<number | null>(null);
   const n = plan.hours.length;
   const inner = Math.max(width - GUTTER - RIGHT, 200);
   const x = (i: number) => GUTTER + (i / n) * inner;
+  const bw = inner / n;
 
-  // where each block starts and ends, in hour positions
   const spans = useMemo(() => {
     const out: { block: number; from: number; to: number }[] = [];
     plan.hours.forEach((h, i) => {
@@ -60,86 +61,49 @@ export function DayRail({ plan, showActual = true, compact = false }: { plan: Da
     return out;
   }, [plan]);
 
-  const tops = useMemo(() => {
-    let y = 0;
-    const t: Record<string, number> = {};
-    (Object.keys(STRIPS) as (keyof typeof STRIPS)[]).forEach((k) => {
-      if (compact && k === "demand") return;
-      t[k] = y;
-      y += STRIPS[k] + (k === "axis" ? 0 : GAP);
-    });
-    t.total = y;
-    return t;
-  }, [compact]);
+  const top = { tiles: HEIGHT.axis, price: HEIGHT.axis + HEIGHT.tiles + GAP, battery: HEIGHT.axis + HEIGHT.tiles + HEIGHT.price + 2 * GAP };
+  const total = top.battery + HEIGHT.battery + 6;
 
-  // --- price strip
+  // price
   const priceVals = plan.hours.flatMap((h) => [h.price_fc ?? NaN, showActual ? h.price_actual : NaN]).filter(isFinite);
   const bandVals = plan.blocks.flatMap((b) => [b.price_q10 ?? NaN, b.price_q90 ?? NaN]).filter(isFinite);
   const pLo = Math.min(0, ...priceVals, ...bandVals);
   const pHi = Math.max(...priceVals, ...bandVals) * 1.05;
-  const yP = scaleLinear().domain([pLo, pHi]).range([tops.price + STRIPS.price, tops.price + 16]);
+  const yP = scaleLinear().domain([pLo, pHi]).range([top.price + HEIGHT.price, top.price + 14]);
 
-  // --- battery strip (MWh per hour = MW)
+  // battery: energy in each hour, stored above the line, used below
   const pMax = Math.max(plan.battery.power_mw, ...plan.hours.map((h) => Math.max(h.charge_bid_mwh, h.planned_discharge_mwh)));
-  const midB = tops.battery + STRIPS.battery / 2 + 6;
-  const yB = scaleLinear().domain([-pMax, pMax]).range([tops.battery + STRIPS.battery, tops.battery + 12]);
-
-  // --- charge level strip
-  const cap = plan.battery.capacity_mwh;
-  const yL = scaleLinear().domain([0, cap]).range([tops.level + STRIPS.level, tops.level + 12]);
-  const levelActual = [plan.summary.soc_start_mwh, ...plan.hours.map((h) => h.soc_mwh)];
-  const levelPath = levelActual.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${yL(v).toFixed(1)}`).join("");
-
-  // --- demand strip
-  const dVals = plan.hours.flatMap((h) => [h.demand_fc_mw, showActual ? h.demand_actual_mw : NaN]).filter(isFinite);
-  const dBand = plan.blocks.flatMap((b) => [b.demand_q10_mw ?? NaN, b.demand_q90_mw ?? NaN]).filter(isFinite);
-  const dLo = Math.min(...dVals, ...dBand);
-  const dHi = Math.max(...dVals, ...dBand);
-  const pad = (dHi - dLo) * 0.12 || 10;
-  const yD = scaleLinear().domain([dLo - pad, dHi + pad]).range([(tops.demand ?? 0) + STRIPS.demand, (tops.demand ?? 0) + 14]);
-
-  const bw = inner / n;
-  const h = hover != null ? plan.hours[hover] : null;
-  const readoutLeft = hover != null ? (x(hover + 0.5) > width * 0.62 ? x(hover) - 216 : x(hover + 1) + 12) : 0;
+  const yB = scaleLinear().domain([-pMax, pMax]).range([top.battery + HEIGHT.battery, top.battery + 8]);
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const i = Math.floor(((e.clientX - rect.left - GUTTER) / inner) * n);
     setHover(i >= 0 && i < n ? i : null);
   };
+  const h = hover != null ? plan.hours[hover] : null;
+  const readoutLeft = hover != null ? (x(hover + 0.5) > width * 0.62 ? x(hover) - 212 : x(hover + 1) + 12) : 0;
 
-  const stripLabel = (key: string, name: string, unit: string) => (
+  const label = (y: number, name: string, unit: string) => (
     <g>
-      <text className="strip-name" x={0} y={tops[key] + 14}>
+      <text className="strip-name" x={0} y={y + 14}>
         {name}
       </text>
-      <text className="strip-unit" x={0} y={tops[key] + 30}>
+      <text className="strip-unit" x={0} y={y + 30}>
         {unit}
       </text>
     </g>
   );
 
-  const yAxis = (ticks: number[], y: (v: number) => number, fmt: (v: number) => string = int) =>
-    ticks.map((t) => (
-      <g key={t}>
-        <line x1={GUTTER} x2={GUTTER + inner} y1={y(t)} y2={y(t)} stroke="var(--rule-soft)" />
-        <text x={GUTTER - 8} y={y(t) + 4} textAnchor="end">
-          {fmt(t)}
-        </text>
-      </g>
-    ));
-
   return (
     <div className="rail" ref={ref}>
       <svg
-        height={tops.total}
-        viewBox={`0 0 ${width} ${tops.total}`}
+        height={total}
+        viewBox={`0 0 ${width} ${total}`}
         role="img"
-        aria-label={`Plan for ${plan.date}: decision per block, price, battery charge and discharge, charge level${compact ? "" : " and city demand"} for each hour. The same numbers are in the tables below.`}
+        aria-label={`Plan for ${plan.date}: the decision for each 4-hour block, the price and what the battery does in each hour.`}
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
       >
-        {/* hours along the top */}
         {spans.map((s) => (
           <text key={s.block} x={x(s.from)} y={17} textAnchor={s.from === 0 ? "start" : "middle"}>
             {plan.hours[s.from].hour}
@@ -148,69 +112,71 @@ export function DayRail({ plan, showActual = true, compact = false }: { plan: Da
         <text x={x(n)} y={17} textAnchor="end">
           24:00
         </text>
-
-        {/* block boundaries run through every strip */}
-        {spans.map((s) => (
-          <line key={s.block} x1={x(s.from)} x2={x(s.from)} y1={STRIPS.axis} y2={tops.total - GAP} stroke="var(--rule)" />
+        {[...spans.map((s) => s.from), n].map((i) => (
+          <line key={i} x1={x(i)} x2={x(i)} y1={HEIGHT.axis} y2={total - 6} stroke="var(--rule)" />
         ))}
-        <line x1={x(n)} x2={x(n)} y1={STRIPS.axis} y2={tops.total - GAP} stroke="var(--rule)" />
 
-        {/* 1 decision tiles */}
-        {stripLabel("tiles", "Decision", "per 4-hour block")}
+        {/* decision per block */}
+        {label(top.tiles, "Decision", "per block")}
         {spans.map((s) => {
           const b = plan.blocks[s.block];
           const w = x(s.to) - x(s.from) - 6;
-          const fill = b.charge_mwh > 0.05 ? "var(--charge-tint)" : b.discharge_mwh > 0.05 ? "var(--use-tint)" : "var(--paper)";
-          const edge = b.charge_mwh > 0.05 ? "var(--charge)" : b.discharge_mwh > 0.05 ? "var(--use)" : "var(--ink-3)";
-          const word = w > 132 ? OPTION_WORDS[b.option] : OPTION_SHORT[b.option];
-          const fig =
-            b.charge_mwh > 0.05 ? `store ${dec1(b.charge_mwh)} MWh` : b.discharge_mwh > 0.05 ? `use ${dec1(b.discharge_mwh)} MWh` : `${int(b.buy_mwh)} MWh`;
+          const charging = b.charge_mwh > 0.05;
+          const using = b.discharge_mwh > 0.05;
+          const fill = charging ? "var(--charge-tint)" : using ? "var(--use-tint)" : "var(--paper)";
+          const edge = charging ? "var(--charge)" : using ? "var(--use)" : "var(--ink-3)";
+          const fig = charging ? `store ${dec1(b.charge_mwh)} MWh` : using ? `use ${dec1(b.discharge_mwh)} MWh` : `${int(b.buy_mwh)} MWh`;
           return (
             <g key={s.block}>
-              <rect x={x(s.from) + 3} y={tops.tiles + 4} width={w} height={STRIPS.tiles - 8} rx={7} fill={fill} />
-              <rect x={x(s.from) + 3} y={tops.tiles + 4} width={5} height={STRIPS.tiles - 8} rx={2.5} fill={edge} />
-              <text className="tile-word" x={x(s.from) + 17} y={tops.tiles + 28}>
-                {word}
+              <rect x={x(s.from) + 3} y={top.tiles + 4} width={w} height={HEIGHT.tiles - 8} rx={7} fill={fill} />
+              <rect x={x(s.from) + 3} y={top.tiles + 4} width={5} height={HEIGHT.tiles - 8} rx={2.5} fill={edge} />
+              <text className="tile-word" x={x(s.from) + 17} y={top.tiles + 28}>
+                {w > 132 ? OPTION_WORDS[b.option] : OPTION_SHORT[b.option]}
               </text>
-              <text className="tile-fig" x={x(s.from) + 17} y={tops.tiles + 46}>
+              <text className="tile-fig" x={x(s.from) + 17} y={top.tiles + 46}>
                 {fig}
               </text>
             </g>
           );
         })}
 
-        {/* 2 price */}
-        {stripLabel("price", "Price", "EUR per MWh")}
-        {yAxis(niceTicks(pLo, pHi, 3), yP)}
+        {/* price */}
+        {label(top.price, "Price", "EUR per MWh")}
+        {niceTicks(pLo, pHi, 3).map((t) => (
+          <g key={t}>
+            <line x1={GUTTER} x2={GUTTER + inner} y1={yP(t)} y2={yP(t)} stroke="var(--rule-soft)" />
+            <text x={GUTTER - 8} y={yP(t) + 4} textAnchor="end">
+              {int(t)}
+            </text>
+          </g>
+        ))}
         {spans.map((s) => {
           const b = plan.blocks[s.block];
           if (b.price_q10 == null || b.price_q90 == null) return null;
-          return (
-            <rect key={s.block} x={x(s.from)} width={x(s.to) - x(s.from)} y={yP(b.price_q90)} height={Math.max(yP(b.price_q10) - yP(b.price_q90), 0)} fill="var(--price-tint)" />
-          );
+          return <rect key={s.block} x={x(s.from)} width={x(s.to) - x(s.from)} y={yP(b.price_q90)} height={Math.max(yP(b.price_q10) - yP(b.price_q90), 0)} fill="var(--price-tint)" />;
         })}
         <path d={stepPath(plan.hours.map((r) => r.price_fc), x, yP)} fill="none" stroke="var(--price)" strokeWidth={2.25} strokeLinejoin="round" />
         {showActual && <path d={stepPath(plan.hours.map((r) => r.price_actual), x, yP)} fill="none" stroke="var(--ink)" strokeWidth={1.25} />}
 
-        {/* 3 battery */}
-        {stripLabel("battery", "Battery", "MWh in each hour")}
-        <text x={GUTTER - 8} y={yB(pMax) + 4} textAnchor="end">
-          {`store ${int(pMax)}`}
+        {/* battery */}
+        {label(top.battery, "Battery", "MWh per hour")}
+        <text x={GUTTER - 8} y={yB(pMax / 2) + 4} textAnchor="end">
+          store
         </text>
-        <text x={GUTTER - 8} y={yB(-pMax) + 4} textAnchor="end">
-          {`use ${int(pMax)}`}
+        <text x={GUTTER - 8} y={yB(-pMax / 2) + 4} textAnchor="end">
+          use
         </text>
         <line x1={GUTTER} x2={GUTTER + inner} y1={yB(0)} y2={yB(0)} stroke="var(--ink-3)" />
         {plan.hours.map((r, i) => {
           const g = 2;
-          const cleared = showActual ? r.charge_actual_mwh : r.charge_bid_mwh;
+          const stored = showActual ? r.charge_actual_mwh : r.charge_bid_mwh;
           const used = showActual ? r.discharge_actual_mwh : r.planned_discharge_mwh;
           return (
             <g key={r.utc}>
-              {r.charge_bid_mwh - cleared > 0.05 && (
+              {r.charge_bid_mwh - stored > 0.05 && (
                 <rect x={x(i) + g} width={bw - 2 * g} y={yB(r.charge_bid_mwh)} height={yB(0) - yB(r.charge_bid_mwh)} fill="none" stroke="var(--charge)" strokeDasharray="3 3" rx={3} />
               )}
-              {cleared > 0.01 && <rect x={x(i) + g} width={bw - 2 * g} y={yB(cleared)} height={yB(0) - yB(cleared)} fill="var(--charge)" rx={3} />}
+              {stored > 0.01 && <rect x={x(i) + g} width={bw - 2 * g} y={yB(stored)} height={yB(0) - yB(stored)} fill="var(--charge)" rx={3} />}
               {r.planned_discharge_mwh - used > 0.05 && (
                 <rect x={x(i) + g} width={bw - 2 * g} y={yB(0)} height={yB(-r.planned_discharge_mwh) - yB(0)} fill="none" stroke="var(--use)" strokeDasharray="3 3" rx={3} />
               )}
@@ -219,36 +185,7 @@ export function DayRail({ plan, showActual = true, compact = false }: { plan: Da
           );
         })}
 
-        {/* 4 charge level */}
-        {stripLabel("level", "Charge level", "MWh in the battery")}
-        {[plan.battery.soc_min_frac * cap, plan.battery.soc_max_frac * cap].map((v) => (
-          <g key={v}>
-            <line x1={GUTTER} x2={GUTTER + inner} y1={yL(v)} y2={yL(v)} stroke="var(--ink-3)" strokeDasharray="2 4" />
-            <text x={GUTTER - 8} y={yL(v) + 4} textAnchor="end">
-              {int(v)}
-            </text>
-          </g>
-        ))}
-        <path key={`${plan.date}-${plan.battery.capacity_mwh}-${plan.battery.power_mw}`} className="draw-once" pathLength={1} d={levelPath} fill="none" stroke="var(--ink)" strokeWidth={2.25} strokeLinejoin="round" />
-
-        {/* 5 demand */}
-        {!compact && (
-          <g>
-            {stripLabel("demand", "City demand", "MW")}
-            {yAxis(niceTicks(dLo - pad, dHi + pad, 3), yD)}
-            {spans.map((s) => {
-              const b = plan.blocks[s.block];
-              if (b.demand_q10_mw == null || b.demand_q90_mw == null) return null;
-              return (
-                <rect key={s.block} x={x(s.from)} width={x(s.to) - x(s.from)} y={yD(b.demand_q90_mw)} height={Math.max(yD(b.demand_q10_mw) - yD(b.demand_q90_mw), 0)} fill="var(--rule-soft)" />
-              );
-            })}
-            <path d={stepPath(plan.hours.map((r) => r.demand_fc_mw), x, yD)} fill="none" stroke="var(--demand)" strokeWidth={2.25} strokeLinejoin="round" />
-            {showActual && <path d={stepPath(plan.hours.map((r) => r.demand_actual_mw), x, yD)} fill="none" stroke="var(--ink)" strokeWidth={1.25} />}
-          </g>
-        )}
-
-        {hover != null && <rect x={x(hover)} width={bw} y={STRIPS.axis} height={tops.total - STRIPS.axis - GAP} fill="var(--ink)" opacity={0.07} />}
+        {hover != null && <rect x={x(hover)} width={bw} y={HEIGHT.axis} height={total - HEIGHT.axis - 6} fill="var(--ink)" opacity={0.07} />}
       </svg>
 
       {h && (
@@ -261,32 +198,16 @@ export function DayRail({ plan, showActual = true, compact = false }: { plan: Da
             <dd>{h.price_fc == null ? "–" : dec1(h.price_fc)}</dd>
             {showActual && (
               <>
-                <dt>Price, actual</dt>
+                <dt>Actual price</dt>
                 <dd>{dec1(h.price_actual)}</dd>
               </>
             )}
-            <dt>Demand forecast</dt>
-            <dd>{dec1(h.demand_fc_mw)} MW</dd>
-            {showActual && (
-              <>
-                <dt>Demand, actual</dt>
-                <dd>{dec1(h.demand_actual_mw)} MW</dd>
-              </>
-            )}
-            <dt>Bid for the city</dt>
+            <dt>Bought for the city</dt>
             <dd>{dec1(h.demand_bid_mwh)} MWh</dd>
             {h.charge_bid_mwh > 0.01 && (
               <>
-                <dt>Bid to store</dt>
-                <dd>
-                  {dec1(h.charge_bid_mwh)} MWh{h.charge_limit_eur_mwh != null ? ` up to ${dec1(h.charge_limit_eur_mwh)}` : ""}
-                </dd>
-                {showActual && (
-                  <>
-                    <dt>Stored</dt>
-                    <dd>{dec1(h.charge_actual_mwh)} MWh</dd>
-                  </>
-                )}
+                <dt>Stored</dt>
+                <dd>{dec1(showActual ? h.charge_actual_mwh : h.charge_bid_mwh)} MWh</dd>
               </>
             )}
             {h.planned_discharge_mwh > 0.01 && (
@@ -295,7 +216,7 @@ export function DayRail({ plan, showActual = true, compact = false }: { plan: Da
                 <dd>{dec1(showActual ? h.discharge_actual_mwh : h.planned_discharge_mwh)} MWh</dd>
               </>
             )}
-            <dt>Charge level</dt>
+            <dt>In the battery after</dt>
             <dd>{dec1(h.soc_mwh)} MWh</dd>
           </dl>
         </div>
@@ -304,23 +225,18 @@ export function DayRail({ plan, showActual = true, compact = false }: { plan: Da
   );
 }
 
-export function RailLegend({ showActual, compact = false }: { showActual: boolean; compact?: boolean }) {
+export function RailLegend({ showActual }: { showActual: boolean }) {
   return (
     <div className="legend" aria-hidden="true">
       <span>
         <i className="swatch line" style={{ color: "var(--price)" }} /> Price forecast
       </span>
-      {!compact && (
-        <span>
-          <i className="swatch line" style={{ color: "var(--demand)" }} /> Demand forecast
-        </span>
-      )}
       <span>
-        <i className="swatch" style={{ background: "var(--price-tint)" }} /> Likely range (8 in 10 days)
+        <i className="swatch" style={{ background: "var(--price-tint)" }} /> Likely price range
       </span>
       {showActual && (
         <span>
-          <i className="swatch line thin" style={{ color: "var(--ink)" }} /> What really happened
+          <i className="swatch line thin" style={{ color: "var(--ink)" }} /> Actual price
         </span>
       )}
       <span>
@@ -329,11 +245,11 @@ export function RailLegend({ showActual, compact = false }: { showActual: boolea
       <span>
         <i className="swatch" style={{ background: "var(--use)" }} /> Used
       </span>
-      <span>
-        <i className="swatch outline" /> Planned, but did not happen
-      </span>
+      {showActual && (
+        <span>
+          <i className="swatch outline" /> Planned, did not happen
+        </span>
+      )}
     </div>
   );
 }
-
-export { OPTION_WORDS };

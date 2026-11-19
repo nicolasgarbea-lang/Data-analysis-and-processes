@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { runMonth, useApiHealth, useCustomPlan, useDay, useMeta } from "../data/api";
 import type { BatterySettings } from "../data/types";
 import { DayRail, RailLegend } from "../charts/DayRail";
+import { Fold } from "../ui/Blocks";
 import { DayPicker, defaultDate } from "../ui/DayPicker";
 import { planSentence } from "../ui/sentence";
 import { chf, dec1, int, pct } from "../lib/format";
@@ -70,9 +71,7 @@ export function Battery() {
   return (
     <>
       <h1 className="statement">Try a different battery.</h1>
-      <p className="lede">
-        Change the battery and the plan for the day is worked out again. Then run the whole of October to see what the new battery would have saved.
-      </p>
+      <p className="lede">Move a slider and the day is planned again. Run October to see what that battery would have saved over the month.</p>
 
       <section className="section two-col">
         <div>
@@ -99,6 +98,8 @@ export function Battery() {
               show={(v) => pct(v * 100)}
               onChange={(v) => set({ round_trip_efficiency: v })}
             />
+            <Fold title="More settings" hint="Wear cost, charge limits, cycles, selling back">
+              <div className="sliders">
             <Slider
               label="Wear cost"
               hint="Charged for every MWh taken out of the battery"
@@ -141,6 +142,8 @@ export function Battery() {
               <input type="checkbox" checked={battery.allow_sell} onChange={(e) => set({ allow_sell: e.target.checked })} />
               <span>Allow selling stored energy back to the market</span>
             </label>
+              </div>
+            </Fold>
             <div>
               <button type="button" className="btn quiet" onClick={() => setBattery(meta.data!.battery)} disabled={!changed}>
                 Reset to {meta.data.battery.power_mw} MW / {meta.data.battery.capacity_mwh} MWh
@@ -155,7 +158,7 @@ export function Battery() {
             <Offline checking={health.isLoading} />
           ) : (
             <>
-              <p className="explain">Plans and settles all 31 days of the test month. It takes a few seconds.</p>
+              <p className="explain">Plans and settles all 31 days of the test month, in a few seconds.</p>
               <p style={{ marginTop: "1rem" }}>
                 <button type="button" className="btn" onClick={() => month.mutate(battery)} disabled={month.isPending}>
                   {month.isPending ? "Running October…" : "Run October"}
@@ -163,36 +166,17 @@ export function Battery() {
               </p>
               {month.isError && <p className="status error">October could not be run: {(month.error as Error).message}</p>}
               {month.data && (
-                <dl className="ledger">
+                <dl className="figures" style={{ gridTemplateColumns: "1fr", marginTop: "1.25rem" }}>
                   <div className="good">
-                    <dt>Saved by the battery</dt>
+                    <dt>saved by this battery in October</dt>
                     <dd>{chf(month.data.battery_value_chf)}</dd>
                   </div>
                   <div>
                     <dt>
-                      Best possible for this battery
-                      <small>hourly plan with perfect foresight</small>
+                      {pct((100 * month.data.battery_value_chf) / month.data.ceiling_battery_value_chf)} of the best possible ({chf(month.data.ceiling_battery_value_chf)}), and{" "}
+                      {chf(month.data.battery_value_chf / battery.capacity_mwh)} per MWh of capacity
                     </dt>
-                    <dd>{chf(month.data.ceiling_battery_value_chf)}</dd>
-                  </div>
-                  <div>
-                    <dt>Share of the best possible</dt>
-                    <dd>{pct((100 * month.data.battery_value_chf) / month.data.ceiling_battery_value_chf)}</dd>
-                  </div>
-                  <div>
-                    <dt>Battery saving per MWh of capacity</dt>
-                    <dd>{chf(month.data.battery_value_chf / battery.capacity_mwh)}</dd>
-                  </div>
-                  <div>
-                    <dt>Cycles in the month</dt>
-                    <dd>{dec1(month.data.cycles)}</dd>
-                  </div>
-                  <div className="total">
-                    <dt>
-                      Total saved against the simple rule
-                      <small>better demand forecast plus battery</small>
-                    </dt>
-                    <dd>{chf(month.data.saving_vs_baseline_chf)}</dd>
+                    <dd style={{ fontSize: "var(--step-1)" }}>{dec1(month.data.cycles)} cycles</dd>
                   </div>
                 </dl>
               )}
@@ -213,7 +197,7 @@ export function Battery() {
           <>
             <p className="explain">The planning service is not running, so this is the plan with the standard battery.</p>
             <div className="rail-wrap">
-              <DayRail plan={base.data} compact />
+              <DayRail plan={base.data} />
             </div>
           </>
         )}
@@ -224,43 +208,14 @@ export function Battery() {
               {planSentence(plan)}
             </p>
             <div className="rail-wrap" style={{ opacity: custom.isFetching ? 0.6 : 1 }}>
-              <DayRail plan={plan} compact />
+              <DayRail plan={plan} />
             </div>
-            <RailLegend showActual compact />
+            <RailLegend showActual />
             {base.data && (
-              <div className="table-scroll">
-                <table className="data" style={{ maxWidth: "44rem" }}>
-                  <thead>
-                    <tr>
-                      <th>On this day</th>
-                      <th className="r">Standard battery</th>
-                      <th className="r">Your battery</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>Stored</td>
-                      <td className="r">{int(base.data.summary.charged_mwh)} MWh</td>
-                      <td className="r">{int(plan.summary.charged_mwh)} MWh</td>
-                    </tr>
-                    <tr>
-                      <td>Expected saving from the battery</td>
-                      <td className="r">{chf(base.data.summary.expected_battery_saving_chf)}</td>
-                      <td className="r">{chf(plan.summary.expected_battery_saving_chf)}</td>
-                    </tr>
-                    <tr>
-                      <td>Saving after settlement</td>
-                      <td className="r">{chf(base.data.summary.realised_battery_saving_chf)}</td>
-                      <td className="r">{chf(plan.summary.realised_battery_saving_chf)}</td>
-                    </tr>
-                    <tr>
-                      <td>Total cost of the day</td>
-                      <td className="r">{chf(base.data.summary.realised_cost_chf)}</td>
-                      <td className="r">{chf(plan.summary.realised_cost_chf)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              <p className="note" style={{ fontSize: "var(--step-0)" }}>
+                On this day this battery saved {chf(plan.summary.realised_battery_saving_chf)}.
+                {changed && ` The standard ${meta.data.battery.power_mw} MW battery saved ${chf(base.data.summary.realised_battery_saving_chf)}.`}
+              </p>
             )}
           </>
         )}

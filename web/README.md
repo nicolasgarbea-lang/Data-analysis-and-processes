@@ -23,8 +23,8 @@ or separately: `bun run api` (the Python service) and `bun run dev` (the web app
 
 ## What needs the planning service
 
-Four pages (Tomorrow, Month, Drivers, Method) read only the exported JSON files and work without Python. The
-Battery page changes the battery and plans again, which needs the optimiser: it calls `api/server.py`
+Three pages (Tomorrow, Results, How it works) read only the exported JSON files and work without Python. The
+"Try a battery" page changes the battery and plans again, which needs the optimiser: it calls `api/server.py`
 (`POST /api/plan`, `POST /api/month`). If the service is not running the page says so and shows the command.
 
 ## Build a static site

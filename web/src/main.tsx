@@ -7,8 +7,7 @@ import "./styles.css";
 import { useMeta } from "./data/api";
 import { Tomorrow } from "./routes/Tomorrow";
 import { Battery } from "./routes/Battery";
-import { Month } from "./routes/Month";
-import { DriversPage } from "./routes/Drivers";
+import { Results } from "./routes/Results";
 import { MethodPage } from "./routes/Method";
 
 type DaySearch = { date?: string };
@@ -26,17 +25,14 @@ function Shell() {
           <Link to="/" activeOptions={{ exact: true, includeSearch: false }} activeProps={{ "aria-current": "page" }}>
             Tomorrow
           </Link>
+          <Link to="/results" activeProps={{ "aria-current": "page" }}>
+            Results
+          </Link>
           <Link to="/battery" activeOptions={{ includeSearch: false }} activeProps={{ "aria-current": "page" }}>
-            Battery
+            Try a battery
           </Link>
-          <Link to="/month" activeProps={{ "aria-current": "page" }}>
-            Month
-          </Link>
-          <Link to="/drivers" activeProps={{ "aria-current": "page" }}>
-            Drivers
-          </Link>
-          <Link to="/method" activeProps={{ "aria-current": "page" }}>
-            Method
+          <Link to="/how" activeProps={{ "aria-current": "page" }}>
+            How it works
           </Link>
         </nav>
         {meta.data && (
@@ -61,12 +57,11 @@ function Shell() {
 const rootRoute = createRootRoute({ component: Shell });
 const tomorrowRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: Tomorrow, validateSearch: daySearch });
 const batteryRoute = createRoute({ getParentRoute: () => rootRoute, path: "/battery", component: Battery, validateSearch: daySearch });
-const monthRoute = createRoute({ getParentRoute: () => rootRoute, path: "/month", component: Month });
-const driversRoute = createRoute({ getParentRoute: () => rootRoute, path: "/drivers", component: DriversPage });
-const methodRoute = createRoute({ getParentRoute: () => rootRoute, path: "/method", component: MethodPage });
+const resultsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/results", component: Results });
+const methodRoute = createRoute({ getParentRoute: () => rootRoute, path: "/how", component: MethodPage });
 
 const router = createRouter({
-  routeTree: rootRoute.addChildren([tomorrowRoute, batteryRoute, monthRoute, driversRoute, methodRoute]),
+  routeTree: rootRoute.addChildren([tomorrowRoute, resultsRoute, batteryRoute, methodRoute]),
   history: createHashHistory(), // works from any static file host
   scrollRestoration: true,
 });
