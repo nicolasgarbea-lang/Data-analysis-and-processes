@@ -222,7 +222,7 @@ Single LightGBM with the final settings unless stated; `cv_mae` = mean over the 
   Derived columns (`PriceExtras`, e.g. day-D shape, weekday of day D, gas cost vs price, radiation × weekend)
   helped (D1: 15.1 without them).
 * **Ensemble.** The LEAR-style ridge regression alone (E4) is close to a single LightGBM on September (14.1) but
-  much worse on the CV (16.7); blended 35 % it lowers the September MAE from 14.0 to 13.7 and halves the bias.
+  much worse on the CV (16.7); blended 35 % it lowers the September MAE from 14.0 to 13.7 and lowers the bias by about 30 % (from −3.8 to −2.6).
   Averaging the ridge over three calibration windows (E3) did not help.
 * **Weekly walk-forward refit** (G1) beat a single fit (G0, 13.62 vs 13.67) and reduced the bias from −2.6 to −1.4
   EUR; a daily refit (G2) was not better.
@@ -333,8 +333,16 @@ See rows S0–S5 in "What was tried" (val = September, test = October, fit on da
   September/October comes from months where the price level moves.
 * **Weather history.** Zurich weather is observed before 2024 and forecast after; ICON European weather exists only
   from 2024 (left out), JMA has no radiation. Better European solar forecasts with a long history would help.
-* **No cross-border capacity data.** Several misses are days where CH decoupled from Germany (full interconnectors);
+* **No cross-border capacity data.** Several misses are days where CH decoupled from Germany (possibly full interconnectors - this is a guess);
   we have no capacity or flow forecasts.
+* **The saved model file is one fit.** `models/price_best.joblib` is the fit on data up to 30 Sep. The scored
+  October forecast (`pred_best`) comes from weekly refits, so the file reproduces only the first 7 days exactly.
+  Used alone for the whole of October the single fit scores an MAE of 12.35 EUR/MWh (checked by the independent
+  reviewer); the battery result changes by about CHF 250.
+* **One derived input still uses ICON data:** `rad_de_x_trend` (German radiation forecast x solar build-out trend)
+  is kept although the raw ICON European columns are left out.
+* **October sensitivity runs:** the "without X" runs were scored on October too, after the settings were frozen.
+  The code does not enforce this order, so we state it here: no choice was made with October numbers.
 * **Importance is from the fixed models** (fit ≤ Aug 31 / ≤ Sep 30), not from the weekly walk-forward refits that
   produce `pred_best`; the drivers are the same, the numbers slightly differ.
 

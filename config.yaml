@@ -38,6 +38,8 @@ battery:
   allow_sell: false
 
 bidding:
+  # These are the plain defaults. The backtest and the app use the settings tuned on data before
+  # October 2026, stored in reports/decision_tuning.csv (see src.backtest.run_backtest.tuned_decision).
   charge_limit_factor: 0.9       # limit price = expected discharge price * factor - wear cost
   min_spread_eur_mwh: 0.0        # extra margin per MWh discharged the expected spread must cover (plan only)
   plan_resolution: block         # block = plan the 6 blocks; hourly_shape = plan 24 h with a last-week hourly price shape

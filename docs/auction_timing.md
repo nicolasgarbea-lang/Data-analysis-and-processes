@@ -32,7 +32,7 @@
 | gas_ttf_daily | trading day 18:00 | ICE Endex settlement ~16:30–17:30 CET; Yahoo close |
 | co2_eua_daily | auction day 12:00 | EEX auction window closes 11:00, results within 15 min |
 | eurchf_daily | date 16:00 | ECB reference rate published ~16:00 CET |
-| reservoir_weekly | Monday date + 2 days, 18:00 (Wednesday) | assumption; file Last-Modified Tue 17 Nov 2026 15:22 CET for the Sunday-15-Nov value |
+| reservoir_weekly | Monday date + 3 days, 23:59 (Thursday end of day) | federal energy dashboard states Thursday publication; file Last-Modified Tue 17 Nov 2026 15:22 CET for the Sunday-15-Nov value |
 | de_forecasts_hourly | **unverified** (flag column); legal deadlines: load D−1 10:00 CET, wind/solar D−1 18:00 CET | EU Transparency Regulation 543/2013 Art. 6, 14 (https://eur-lex.europa.eu/eli/reg/2013/543/oj) |
 
 ## Sources

@@ -2,7 +2,7 @@
 
 **Focus:** Switzerland, with the **city of Zurich (ewz)** as our DSO. The price is Swiss (one price for all of Switzerland). Demand, weather, EVs, holidays and events are for Zurich.
 
-*Checked on 19 Nov 2026 by downloading small samples from every source. Everything below is free unless noted. "Not verified" items are listed at the end.*
+*Checked on 19 Nov 2026 by downloading small samples from every source, then used in the build. Everything below is free unless noted. The open questions of the first check are answered in "What we verified during the build" at the end. The company in the project (Limmat Energie AG) is fictional; the data is the real ewz load of the city of Zurich.*
 
 ## Summary
 
@@ -11,16 +11,20 @@
 | **Demand (target)** | ewz Bruttolastgang Stadt Zürich | 15 min | 2019 → 18 Nov 2026 | Free, CC0 |
 | **Price (target)** | Energy-Charts API, `bzn=CH` | 1 h (15 min from 4 Nov 2026) | 2019 → tomorrow | Free, CC BY 4.0 |
 | Weather (observed) | MeteoSwiss station Zürich-Fluntern (SMA) | 1 h | 2010 → yesterday | Free |
-| Weather (forecast) | Open-Meteo "previous runs" API | 1 h | real forecasts from ~2024 | Free, CC BY 4.0 |
+| Weather (forecast) | Open-Meteo "previous runs" API (ICON main, ECMWF, JMA) | 1 h | ICON real forecasts from 2024-01-19; JMA back to 2018 | Free, CC BY 4.0 |
+| Weather (reanalysis, check only) | Open-Meteo archive API (ERA5) | 1 h | 2018-12 → now (~5 days lag) | Free, CC BY 4.0 |
+| Weather Europe (price driver) | Open-Meteo previous-runs API, 9 points in DE/FR/IT/CH (ICON, JMA) | 1 h | ICON from 2024-01-19, JMA from 2018-12 | Free, CC BY 4.0 |
 | Rooftop solar | Energy-Charts Swiss solar output | 1 h | 2019 → now | Free |
 | EVs | Stadt Zürich car stock by fuel + BFE charging stations per canton | yearly / monthly | 2002–2025 / 2020-11 → 2026-10 | Free |
 | Holidays | Python `holidays` (ZH) + Stadt Zürich school holidays file | daily | 2018 → 2030 | Free |
 | Events | Hand-made table + football-data.co.uk results | daily | 2019 → 2026 | Free |
-| Neighbour prices | Energy-Charts `bzn=DE-LU`, `FR` | 15 min | 2019 → now | Free |
-| Gas (TTF) | LSEG/Bloomberg at HSG (fallback: Yahoo `TTF=F`) | daily | 2019 → Oct 2026 | HSG / unofficial |
-| CO₂ (EUA) | LSEG/Bloomberg at HSG (fallback: EEX auction results) | daily | 2012 → 2025 (2026 file not found) | HSG / free |
+| Neighbour prices | Energy-Charts `bzn=DE-LU`, `FR`, `AT`, `IT-North` | 1 h (15 min from 1 Oct 2025) | 2019 → now | Free, CC BY 4.0 |
+| Gas (TTF) | **Used: Yahoo `TTF=F` (unofficial fallback)**; the HSG LSEG/Bloomberg export was not available | daily | 2019 → Oct 2026 | unofficial, personal/educational use |
+| CO₂ (EUA) | **Used: EEX primary-market auction results** (archive zip 2012–2025 + 2026 xlsx, found on the EEX site) | auction days | 2012 → 19 Nov 2026 | free, official |
 | Reservoir level | BFE weekly fill of Swiss reservoirs | weekly | 2000 → 16 Nov 2026 | Free |
 | EUR/CHF | ECB data API | daily | long history | Free |
+| COVID stringency | OxCGRT `OxCGRT_compact_national_v1.csv` (GitHub), Switzerland | daily | 2020-01-01 → 2022-12-31 | CC BY 4.0 |
+| German TSO forecasts (stored, not used) | Energy-Charts `public_power_forecast?country=de` | 1 h | 2019 → Nov 2026 | Free; publication time unverified |
 
 The test month (**October 2026**) is fully covered by the two targets and by every main input.
 
@@ -122,8 +126,9 @@ At 11:00 we only know a **forecast** of tomorrow's weather.
 ### Events
 - No open dataset of past events exists, so we **build a small table by hand** (~40 rows): `date, event, type, expected_size`.
   - Sechseläuten: 2019-04-08, 2021-04-19, 2022-04-25, 2023-04-17, 2024-04-15, 2025-04-28, 2026-04-20
-  - Street Parade: 2024-08-10, 2026-08-08 are confirmed. 2020 and 2021 were cancelled. Other years still need checking.
-  - Züri Fäscht: 2019 and 2023 (early July). The dates need checking.
+  - Street Parade (confirmed with sources in `data/manual/events_zurich.csv`): 2019-08-10, 2022-08-13, 2023-08-12, 2024-08-10, 2025-08-09, 2026-08-08. 2020 and 2021 were cancelled.
+  - Züri Fäscht: 5–7 July 2019 and 7–9 July 2023 (confirmed). It did not take place in 2026.
+  - The final table has 183 event-day rows, each with a source URL; events whose date could not be confirmed are listed in `docs/events_unverified.md`.
 - **Football:** `https://www.football-data.co.uk/new/SWZ.csv`, Swiss Super League results 2012 → now.
   - Columns: `Date, Time, Home, Away, ...`
   - Keep home games of FC Zürich and Grasshoppers.
@@ -140,7 +145,7 @@ At 11:00 we only know a **forecast** of tomorrow's weather.
 | Reservoir level | `https://www.bfe-ogd.ch/ogd17/ogd17_fuellungsgrad_speicherseen.csv` | weekly | Date, fill in GWh for Wallis, Graubünden, Tessin, rest of CH, total, and maxima → `2026-11-16, ..., 5546 (CH total), ..., 8895 (CH max)` |
 | EUR/CHF | `https://data-api.ecb.europa.eu/service/data/EXR/D.CHF.EUR.SP00.A?startPeriod=..&format=csvdata` | daily | `2026-10-01, 0.9437` |
 
-**Timing rule:** use only what is known **on day D before 11:00**. For daily drivers (gas, CO₂, FX) that means the value from day D−1. The reservoir value is measured on Sunday and published a few days later.
+**Timing rule:** use only what is known **on day D at 10:00** (forecast time = gate closure 11:00 − 1 h). For daily drivers (gas, CO₂, FX) that means the value from day D−1 or earlier. The reservoir value is measured on Sunday 24:00 and counted as known from Thursday 23:59 (first used on Friday). Neighbour prices are known for day D only (their D+1 auction closes at 12:00).
 
 ---
 
@@ -165,10 +170,29 @@ One row per **4-hour block** (6 per day), everything converted to **Swiss local 
 
 ---
 
-## Not verified yet
-- ENTSO-E Transparency (the backup for load and price) needs a free account and an API token. Not tested.
-- Whether timestamps mark the start or the end of each interval for MeteoSwiss, ewz 2019 and Swissgrid.
-- What source Open-Meteo's default model uses for 2019–2023.
-- Why the Energy-Charts solar forecast and actual output differ in size.
-- Exact dates of Street Parade (2019, 2022, 2023, 2025) and Züri Fäscht.
-- The 2026 EEX CO₂ auction file. Licence terms of the Yahoo prices.
+## What we verified during the build (was "Not verified yet")
+
+| Open question (19 Nov 2026) | Answer |
+|---|---|
+| Swiss day-ahead gate closure 11:00 or 12:00? | **11:00 CET/CEST** on D−1, results from ~11:10 (EPEX SPOT brochures 2020–2024, EEX glossary); no change found for 2019–2026. The EU-coupled auction (DE, FR, AT, IT) closes at 12:00. Details: `docs/auction_timing.md`. |
+| ewz: do timestamps mark the start or the end of the interval (2019 starts at 00:15)? | **End of the 15-min interval**, in local time, in every year. Proof: the ewz Netzebenen file (UTC, documented as end labels) matches at shift 0 with correlation 0.999993 (0.9966 at ±15 min). The autumn DST duplicates are not in a consistent order (27 of 32 pairs would be wrong in file order) and are matched to Netzebenen. `reports/data_checks.md`. |
+| MeteoSwiss: start or end of the hour? | **End** of the hour ("ReferenceTS 16:00 = 15:10 to 16:00"); shifted −1 h. Check: June radiation peaks symmetrically around solar noon (~11:26 UTC) after the shift. |
+| Open-Meteo: which data for 2019–2023, and from when are there real forecasts? | ICON-seamless previous-runs data starts **2024-01-19** (ECMWF in Feb/Mar 2024). Earlier rows of the default model are not a real forecast archive and are not used. **JMA GSM** has real previous-runs forecasts back to 2018 (no radiation). Open-Meteo stamps are shifted −1 h; `_previous_dayN` was checked against the single-runs API. |
+| Why do the Energy-Charts solar forecast and actual differ? | The scale is **not stable**: forecast/actual = 0.05–0.21 in 2019–2023, ≈ 1.0 in 2024, 0.6–0.7 in 2025–2026 (hourly correlation 0.89–0.98). It seems to cover a different, changing part of Swiss PV, and its publication time is not documented. It is stored as `unverified_ch_solar_fc` and **not used**; the models use the radiation forecast and lagged actual solar instead. |
+| Exact dates of Street Parade and Züri Fäscht | Confirmed with sources (see Events above). |
+| 2026 EEX CO₂ auction file | **Found** on the EEX website (`emission-spot-primary-market-auction-report-2026-data.xlsx`); CO₂ comes from one official source for the whole period. |
+| Licence terms of the Yahoo prices | Personal/educational use only; marked as unofficial everywhere. |
+| ENTSO-E Transparency (backup for load and price) | Not needed and not tested (needs an account and token); Energy-Charts and ewz covered everything. |
+| Swissgrid timestamps | Not needed (Swissgrid data not used). |
+| ewz publication lag | On 19 Nov 2026 at 09:05 the file held data up to the end of 17 Nov (~1.5 days). Our DSO is assumed to read its own meters up to the end of D−1 (sensitivity in `reports/model_notes_demand.md`). |
+
+## Extra sources used in the build (not in the first check)
+
+| Source | URL / endpoint | Used for |
+|---|---|---|
+| ewz Stromabgabe Netzebenen (UTC) | `https://data.stadt-zuerich.ch/dataset/ewz_stromabgabe_netzebenen_stadt_zuerich` | time-label proof, DST pairs, filling two missing 2021 days |
+| Open-Meteo archive (ERA5) | `https://archive-api.open-meteo.com/v1/archive?...&models=era5` | cross-check of observed weather, never a model input |
+| Open-Meteo previous runs, ICON and JMA, 9 European points | `https://previous-runs-api.open-meteo.com/v1/forecast` (`models=icon_seamless`, `jma_seamless`) | German wind/solar, French temperature, Alpine precipitation for the price model |
+| Energy-Charts AT and IT-North prices | `https://api.energy-charts.info/price?bzn=AT` / `bzn=IT-North` | price features (day D) |
+| OxCGRT COVID stringency index | `https://github.com/OxCGRT/covid-policy-dataset` (`OxCGRT_compact_national_v1.csv`) | demand feature for 2020–2022 |
+| Energy-Charts German day-ahead forecasts | `https://api.energy-charts.info/public_power_forecast?country=de&...` | stored only (publication time unverified) |

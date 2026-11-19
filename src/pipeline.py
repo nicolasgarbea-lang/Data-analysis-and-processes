@@ -12,7 +12,7 @@ data      download every source and write clean tables to data/processed/
 features  build the feature table (one row per delivery day and 4-hour block)
 models    train and evaluate the demand model and the price model
 backtest  plan, bid and settle every day of the validation and test month
-metrics   merge the two metrics files into reports/metrics.csv and the docs fragments into single files
+metrics   merge the two metrics files into reports/metrics.csv and the data checks into reports/data_checks.md
 """
 from __future__ import annotations
 

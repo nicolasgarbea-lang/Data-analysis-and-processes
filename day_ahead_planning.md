@@ -1,103 +1,121 @@
-# Day Ahead – Demand and price forecasting for Zurich's DSO (ewz)
+# Day Ahead – Demand and price forecasting for a Zurich DSO
 
-*Business Analytics & Data Science Applications (HSG, HS 2026) · Group project one-pager · v5 (base for team discussion)*
+*Business Analytics & Data Science Applications (HSG, HS 2026) · Group project one-pager · **v6 (final design and results)***
 
 ![From TSO to DSO to homes](docs/architecture_tso_dso.svg)
 
 ## 1. The user and the decision
 
-**User:** **ewz**, the city utility of **Zurich** and its **DSO** (distribution system operator). It sits between the national grid operator (TSO, Swissgrid) and the homes and businesses of Zurich. It has to buy the energy its customers will use. It also owns a **grid battery** (default **10 MW / 20 MWh**), so it can store energy and sell it back.
+**User:** **Limmat Energie AG**, a *fictional* **DSO** (distribution system operator) that supplies the city of
+**Zurich**. It sits between the national grid operator (TSO, Swissgrid) and the homes and businesses of Zurich. Its
+demand is the **real ewz grid load of the city of Zurich**. It has to buy the energy its customers will use, and it
+owns a fictional **grid battery of 20 MW / 40 MWh** (usable 10–90 %, 90 % round trip, at most one cycle per day).
 
-**Why Switzerland and Zurich:** the day-ahead price is the same for the whole of Switzerland (one Swiss price zone), so the price model is Swiss. Demand is local, so the demand model is for the city of Zurich. Zurich also publishes open data for everything we need: grid load every 15 minutes, weather, EVs, school holidays and events.
+**Why Switzerland and Zurich:** the day-ahead price is the same for the whole of Switzerland (one price zone), so the
+price model is Swiss. Demand is local, so the demand model is for the city of Zurich, which publishes its grid load
+every 15 minutes as open data.
 
-**The problem:** the DSO buys its energy on the **day-ahead market**. The auction **closes once a day at 12:00**, and that is when every hour of tomorrow is bought. At that moment the DSO knows neither tomorrow's demand nor tomorrow's price. Demand depends on:
-- **EVs** charging in the evening
-- **Weather**: cold days mean more heating
-- **Rooftop solar** lowering demand at midday
-- **Holidays**
-- **Events** such as festivals or big football matches
+**The problem:** the DSO buys its energy on the Swiss **day-ahead auction**. The auction **closes once a day at
+11:00** (checked in EPEX SPOT documents), and that is when every hour of tomorrow is bought. At that moment the DSO
+knows neither tomorrow's demand nor tomorrow's price. If it buys too much or too little, the difference is an
+**imbalance** that is settled at a worse price.
 
-If the DSO buys too much or too little, it has to correct this later at a worse price or pay an imbalance penalty.
-
-**The decision (once a day, at 11:00, for tomorrow):** for each **4-hour block of tomorrow** (00–04, 04–08, 08–12, 12–16, 16–20, 20–24):
-1. **How much** energy to buy to match forecast demand.
-2. **At what price** to bid, and when to charge or discharge the battery (buy when cheap, sell when expensive).
-
-**Value to the DSO:** CHF saved compared with a simple rule (for example "same as the same day last week"), fewer imbalance costs, and the **% of the perfect-foresight result captured**.
+**The decision (once a day, at 10:00, for tomorrow):** for each **4-hour block of tomorrow** (00–04, 04–08, 08–12,
+12–16, 16–20, 20–24):
+1. **How much** energy to buy.
+2. **How much to store** in the battery and when to use it (options: buy · buy and store · use storage and buy · use
+   storage).
+3. **At what price** to bid for the energy to store.
 
 ```mermaid
 flowchart LR
-    A["Day D, 11:00<br/>Model forecasts tomorrow's<br/>demand and price<br/>(6 blocks of 4 hours)"] --> B["Day D, before 12:00<br/>DSO submits bids:<br/>volume + price per hour"]
-    B --> C["Day D, ~12:45<br/>Auction results published<br/>(tomorrow's real prices)"]
-    C --> D["Day D+1<br/>Energy delivered,<br/>battery charges / discharges"]
-    D --> E["Day D+1, 11:00<br/>Actual demand and price added<br/>→ next forecast"]
+    A["Day D, 10:00<br/>forecast tomorrow's demand<br/>and price (6 blocks)"] --> B["Day D, before 11:00<br/>battery plan +<br/>hourly bids submitted"]
+    B --> C["Day D, ~11:10<br/>Swiss auction results<br/>(tomorrow's prices)"]
+    C --> D["Day D+1<br/>energy delivered,<br/>battery charges / discharges"]
+    D --> E["After D+1<br/>imbalance settled;<br/>actuals feed the next forecast"]
 ```
 
 ## 2. What we predict
 
-Two targets, one value each for every 4-hour block of tomorrow (6 per day):
-
-| Target | Definition | Candidate source (to check) |
+| Target | Definition | Source |
 |---|---|---|
-| **Demand** | Total energy used in the city of Zurich in the block (MWh) | ewz "Bruttolastgang Stadt Zürich" (data.stadt-zuerich.ch, 15-minute steps, 2019 → now). Fallback: total Swiss consumption from Swissgrid |
-| **Price** | Average Swiss day-ahead price of the block (€/MWh) | Energy-Charts API (`bzn=CH`), free |
+| **Demand** | Mean load of the city of Zurich in each block (MW; × hours = MWh) | ewz "Bruttolastgang Stadt Zürich", 15 min, 2019 → Oct 2026 |
+| **Price** | Mean Swiss day-ahead price of the block (EUR/MWh) | Energy-Charts API (`bzn=CH`), hourly |
 
-The auction prices hours (or 15 minutes), not 4-hour blocks. We average to 4-hour blocks to keep the model simple. Going to 24 hourly values later is a small change.
+The plan and the bids are **hourly**: inside each block we use a typical hourly price shape of the last 7 days of the
+same day type, because a 2-hour battery fits inside one 4-hour block.
 
 ## 3. Drivers (features)
 
-Everything must be **known on day D before 12:00**.
+Everything is **known on day D at 10:00** (checked by an automated leakage test).
 
-| Group | Examples | Source | Why it matters |
-|---|---|---|---|
-| **Recent demand** | Demand of today so far, same block yesterday, same block last week | Grid load / smart meters | Demand repeats by day and week |
-| **Recent prices** | Today's day-ahead prices (known since yesterday), same block last week | Energy-Charts | Prices repeat by day and week |
-| **Weather** | Temperature, sunshine, wind for tomorrow | MeteoSwiss, station Zürich-Fluntern | Heating in winter, cooling in summer |
-| **Rooftop solar** | Sunshine or solar radiation, solar output in CH | MeteoSwiss, Energy-Charts | Solar on roofs lowers demand from the grid at midday |
-| **EVs** | Electric cars in the city of Zurich, charging capacity in Kanton Zürich | Stadt Zürich open data, BFE charging-station data | Evening charging creates new peaks |
-| **Calendar** | 4-hour block, weekday, month, Zurich public holidays, Zurich school holidays | `holidays` package (ZH), Stadt Zürich school holidays | Demand pattern |
-| **Events** | Festivals, big concerts, football matches (e.g. Street Parade, Züri Fäscht) | Our own event list (yes/no flag) | Unusual peaks and drops |
-| **Price drivers** | DE/FR prices, gas and CO₂ prices, reservoir level, EUR/CHF | Energy-Charts, LSEG/Bloomberg at HSG, BFE, SNB | Explain where the Swiss price goes |
-| **Battery (sliders)** | Power (MW), capacity (MWh), efficiency (~85–90%) | User input | Scales the plan and the CHF |
+| Group | Examples | What we found |
+|---|---|---|
+| **Recent demand** | Same block on D−1 and one/four weeks back | By far the strongest demand driver |
+| **Recent prices** | All prices of day D, 7-day block shape | Strongest price driver |
+| **Weather** | Real ICON forecast for tomorrow (temperature, radiation) | Second-strongest group; radiation matters most |
+| **Rooftop solar** | Radiation forecast, lagged Swiss solar | Enters through the radiation forecast; lagged solar adds almost nothing |
+| **EVs** | Electric cars in Zurich, charging power in canton Zurich | No measurable effect on 4-hour load yet |
+| **Calendar** | Block, weekday, holidays, school holidays, half-holidays | Essential (holidays: 4.49 vs 52.54 MW error for the naive rule) |
+| **Events** | Street Parade, Züri Fäscht, Sechseläuten, home games | No measurable effect on city load |
+| **Price drivers** | DE/FR/AT/IT prices of day D, gas, CO₂, EUR/CHF, reservoirs, German wind/solar forecasts | Neighbours, gas and German wind help a little; reservoirs add nothing |
+| **Battery** | Power, capacity, efficiency, wear cost | Storage constraints only – **not** a demand input |
 
 ## 4. Time setup
 
-- **Data:** about 2019 → October 2026, aggregated from 15 minutes or hourly to **4-hour blocks**.
-- **Daily forecast:** every day at 11:00 the model uses only what is known at that moment and forecasts the 6 blocks of tomorrow. The next day, the real values are added and it runs again.
-- **Test period:** **one month** (for example October 2026) = ~31 daily runs × 6 blocks = **~186 block forecasts** each for demand and price.
-- **Training:** all data before the test month. No random splits.
+- **Data:** 2019 → October 2026, 2,848 delivery days × 6 blocks.
+- **Train** up to the end of August 2026 · **choose** models and decision rules on September 2026 (and on the rolling
+  period for the decision rules) · **test once** on **October 2026** (31 days × 6 blocks = 186 forecasts per target).
+- **Robustness:** a rolling backtest with monthly refits, October 2025 → August 2026.
 
 ## 5. Workflow and model
 
 ```mermaid
 flowchart TD
-    D["1 · Data<br/>grid load, prices, weather, solar,<br/>EVs, holidays, events"] --> F["2 · Feature table<br/>one row per 4-hour block"]
-    F --> S["3 · Time split<br/>train: before test month · test: one month<br/>TimeSeriesSplit + GridSearch for tuning"]
-    S --> M["4 · Models (one for demand, one for price)<br/>Naive (same block last week) → LinReg →<br/>Random Forest → Gradient Boosting<br/>Metrics: MAE, RMSE, MAPE"]
-    M --> R["5 · Decision rule<br/>buy = forecast demand per block<br/>charge the battery in the cheapest block,<br/>discharge / sell in the most expensive one,<br/>only if the gap covers the losses"]
-    R --> E["6 · Backtest over the test month (CHF)<br/>Naive rule · our model · perfect foresight"]
-    E --> APP["7 · Streamlit app"]
-    APP --> T1["Tomorrow<br/>demand + price per block,<br/>buy / sell / battery advice"]
-    APP --> T2["Month view<br/>forecasts vs actual"]
-    APP --> T3["Drivers<br/>EVs, weather, solar,<br/>holidays, events"]
-    APP --> T4["Battery settings<br/>MW, MWh, efficiency"]
+    D["1 · Data<br/>ewz load, prices, weather forecasts,<br/>EVs, holidays, events, fuels"] --> F["2 · Feature table<br/>one row per delivery day and block<br/>leakage test"]
+    F --> M["3 · Models (demand, price)<br/>naive → linear → random forest → LightGBM → best<br/>(LightGBM + ridge on the change from a known reference)"]
+    M --> O["4 · Optimal blend<br/>mixed-integer battery plan (SciPy/HiGHS)<br/>hourly price shape, 6-block decision table"]
+    O --> B["5 · Hourly bids<br/>demand price-independent,<br/>charging as limit bids"]
+    B --> E["6 · Backtest (CHF)<br/>actual prices and demand, imbalance 1.2 / 0.8,<br/>strategies 1–7, ceiling = perfect foresight hourly"]
+    E --> APP["7 · Streamlit app<br/>Tomorrow · Battery settings · Month backtest ·<br/>Drivers · Data and method"]
 ```
 
-## 6. Questions for the team
+## 6. Key results (October 2026 test month)
 
-1. **Block size:** keep 4-hour blocks, or forecast all 24 hours of tomorrow?
-2. **Test month:** one month only, or one winter and one summer month to show the seasons?
-3. **Weather:** we use observed weather instead of a forecast, which flatters the model. Is that fine if we say so?
-4. **Events:** who builds the Zurich event list (Street Parade, Sechseläuten, Züri Fäscht, football)?
-5. **Battery:** do we keep it in the decision, or focus only on buying?
+| | Result |
+|---|---|
+| Demand forecast error | **3.34 MW** MAE (1.11 %); naive 9.58 MW |
+| Price forecast error | **10.99 EUR/MWh** MAE; naive 23.47 EUR/MWh |
+| Saving vs "naive demand, no battery" | **CHF 226,499** (0.50 % of the purchase cost) |
+| … from the better demand forecast | CHF 181,033 |
+| … from the battery | CHF 45,466 (76 % of the best possible battery value) |
+| Share of the perfect-foresight ceiling | 60 % |
+| Cost of the 4-hour block simplification (perfect foresight) | CHF 31,670 of battery value |
+| Battery value vs size | almost linear, ~CHF 1,137 per MWh of capacity per month |
+| Price error | CHF 475 of battery saving lost per 1 EUR/MWh of MAE per month |
+| Year Oct 2025 – Sep 2026 (backtest) | CHF 2,382,678, of which CHF 693,805 battery |
 
-## 7. What changed
+**Main insight:** a good demand forecast is worth about four times the battery. Details: `reports/report.md`.
 
-| | v3 | v4 | v5 (now) |
-|---|---|---|---|
-| User | Utility with a battery | DSO (plus a battery) | **ewz, Zurich's DSO** (plus a battery) |
-| What we predict | Price only | Demand and price | **Demand and price** |
-| How often | Once a day | Every 4 hours, next 4 hours | **Once a day at 11:00, for tomorrow** |
-| Time step | 24 hourly prices | One 4-hour block | **6 blocks of 4 hours** |
-| Market | Day-ahead | Intraday | **Day-ahead (auction closes 12:00)** |
-| Test | One full year | One month | **One month (~186 block forecasts)** |
+## 7. Decided questions (were open in v5)
+
+| v5 question | Decision and how it was made |
+|---|---|
+| Block size: 4-hour blocks or 24 hours? | **Forecast 4-hour blocks, plan and bid hourly.** The backtest showed that block-only planning loses battery value; an hourly price shape inside the blocks won the tuning on pre-October data. |
+| One test month or two? | **One clean test month (October 2026)** plus an 11-month rolling backtest for robustness. January 2026 is prepared as an optional second test month. |
+| Observed weather instead of a forecast? | **Real forecasts** (Open-Meteo ICON, issued before 10:00) wherever they exist, always in validation and test. Observed weather only for training rows before 21 Jan 2024 (no forecast archive); documented limitation. |
+| Who builds the event list? | Built by hand with a source URL for every row; unconfirmed events are listed in `docs/events_unverified.md`. Result: events have no measurable effect. |
+| Keep the battery in the decision? | **Yes**, as a fictional 20 MW / 40 MWh battery with sliders in the app. It adds CHF 45,466 in October, but the demand forecast adds four times more. |
+
+## 8. What changed
+
+| | v3 | v4 | v5 | **v6 (now)** |
+|---|---|---|---|---|
+| User | Utility with a battery | DSO (plus a battery) | ewz, Zurich's DSO (plus a battery) | **Limmat Energie AG (fictional DSO), real ewz load of Zurich** |
+| What we predict | Price only | Demand and price | Demand and price | **Demand and price per 4-hour block** |
+| How often | Once a day | Every 4 hours, next 4 hours | Once a day at 11:00, for tomorrow | **Once a day at 10:00, for tomorrow** |
+| Time step | 24 hourly prices | One 4-hour block | 6 blocks of 4 hours | **6 blocks forecast, hourly plan and bids** |
+| Market | Day-ahead | Intraday | Day-ahead (auction closes 12:00) | **Swiss day-ahead, gate closure 11:00 (verified)** |
+| Battery | yes | yes | 10 MW / 20 MWh | **20 MW / 40 MWh, mixed-integer plan** |
+| Decision rule | – | – | charge cheapest, discharge dearest block | **optimiser + limit bids, tuned on pre-October data** |
+| Test | One full year | One month | One month (~186 block forecasts) | **October 2026 (186 per target) + rolling Oct 2025 – Aug 2026** |
