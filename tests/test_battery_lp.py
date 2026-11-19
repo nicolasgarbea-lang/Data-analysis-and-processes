@@ -135,3 +135,25 @@ def test_bad_input():
         solve_battery_plan([1, 2], [1, 2, 3])
     with pytest.raises(ValueError):
         solve_battery_plan([1, np.nan], [1, 2])
+
+
+def test_start_level_outside_limits_is_rejected():
+    with pytest.raises(ValueError):
+        solve_battery_plan(DEMAND, [50.0] * 6, battery=BAT, soc_start_mwh=3.0)
+    with pytest.raises(ValueError):
+        solve_battery_plan(DEMAND, [50.0] * 6, battery=BAT, soc_start_mwh=37.0)
+
+
+def test_exact_optimum_with_large_demand_bill():
+    # The city's bill is ~1000x the battery saving; the solver must still find the exact best plan.
+    demand = DEMAND * 10
+    prices = [30.0, 40.0, 90.0, 80.0, 150.0, 100.0]
+    plan = solve_battery_plan(demand, prices, battery=BAT)
+    eta = np.sqrt(0.9)
+    # best plan by hand: fill from 20 to 36 MWh at 30, empty to 4 MWh at 150, refill to 20 at the
+    # cheapest later price (100): only if worth it -> it must refill because the end level is fixed
+    discharged = 32 * eta          # MWh delivered from 36 -> 4
+    charged_first = 16 / eta       # MWh bought to go 20 -> 36
+    refill = 16 / eta              # MWh bought to go 4 -> 20
+    expected_saving = discharged * 150 - charged_first * 30 - refill * 100 - 5.0 * discharged
+    assert plan.attrs["saving_eur"] == pytest.approx(expected_saving, abs=0.01)

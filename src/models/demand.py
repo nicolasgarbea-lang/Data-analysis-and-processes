@@ -610,16 +610,166 @@ two days earlier* (log ratio), five LightGBM runs with different seeds are avera
 ridge regression that learns the same ratio. Settings: `{best}`
 """
 
-NOTES_CHOICE = """## Why this model won
-(filled in after the final run - see below)
-"""
-NOTES_DRIVERS = """## Top-10 drivers
-(filled in after the final run)
-"""
-NOTES_LIMITS = """## Limitations
-(filled in after the final run)
+NOTES_CHOICE = """## Why this model won (decided on September 2026 + CV, before looking at October)
+* **Target transform is the big step.** LightGBM on the demand level: CV MAE 6.41 MW, September 3.85. The same
+  LightGBM predicting log(demand / same block two days earlier): CV 4.61, September 3.29. Trees cannot extrapolate
+  a level, but "a bit higher or lower than the last known day" they predict well. The 2-day reference beats the
+  7-day reference (CV 5.88) and the 4-week same-weekday mean (CV 6.74) because it carries the most recent level
+  (school holidays, weather spells). A plain difference instead of the log ratio was equal in CV (4.59) but worse on
+  September (3.42).
+* **Loss:** L1 and Huber were not better in CV (4.88 / 4.78 vs 4.61); Huber looked good on September alone
+  (3.19) but we trusted the 5 CV folds more than one month - kept squared error (L2).
+* **Weighting:** recency weighting (half-life 1–3 years) and down-weighting the COVID lockdown made CV equal or
+  worse - all history is used with equal weight; `covid_stringency` stays an input.
+* **Weather source:** the ICON/observed hybrid won. JMA forecasts for all years were clearly worse (Sept 3.82, CV
+  4.98) - JMA has no solar radiation, and radiation is the most useful weather input. ICON hybrid + JMA together:
+  CV of the last two folds slightly better (4.59 vs 4.61) but September worse (3.44) - not adopted. Giving
+  forecast-era rows double weight changed nothing. The ORACLE run with observed weather of the delivery day (NOT
+  achievable in practice) reaches 3.01 on September and 3.75 in the last two CV folds: the error of the weather
+  forecast costs about 0.3 MW (≈ 9 %) on September and ≈ 0.9 MW in the recent CV folds.
+* **Extra features:** forecast minus observed temperature / radiation of the reference day helped a little
+  (September 3.37 → 3.29). Ratio versions of all lags (each lag ÷ 2-day lag) and a holiday-"cleaned" reference
+  (7-day lag when the 2-day lag day was a holiday) made CV worse and were dropped.
+* **Ensemble:** averaging 5 LightGBM seeds (3.29 → 3.24) and blending with 15 % ridge regression on the same log
+  ratio (→ 3.20) helped; 30 % ridge was slightly worse (3.22). One-seed LightGBM results move by about ±0.1 MW
+  between seeds, so smaller differences on September are noise.
+* **Daily walk-forward refit:** on September 3.245 → 3.178 MW (1 seed + ridge). This gain is smaller than the seed
+  noise and makes `main()` about 30× slower for the test month, so the model is fit once (≤ 30 Sep) for October.
+* **Hyper-parameters:** an optuna search (TimeSeriesSplit 5 folds on the training period, 16 trials) did not
+  beat the starting values (learning rate 0.03, 1500 trees, 31 leaves; CV 4.615 vs best other 4.628), so those
+  were kept. Ladder ridge/RF/LightGBM settings were set with small CV grids.
+* **Per-block models** were not tried separately: `block` is the 2nd most important input of the pooled model
+  and the pooled model already gets the per-block shape from `demand_dm1_block_*`.
+* **Linear model:** ridge with one-hot block × weekday-type, block × month, per-block slopes for temperature,
+  heating/cooling degrees, radiation and the main lags. Trending inputs (EV counts, charging power, year,
+  COVID index) were left out: a straight line through them gave absurd forecasts in early CV folds
+  (CV 20 → 5.1 MW without them). Missing early values (charging data before Dec 2020, 364-day lag in 2019) are
+  filled with the training median plus a "was missing" flag.
+
+### Error on special days (rolling Oct 2025–Aug 2026 + October 2026, MAE in MW)
+| day type | rows | naive | gbm (level) | best | best bias |
+|---|---|---|---|---|---|
+| normal day | 1548 | 13.68 | 5.18 | 4.55 | −0.41 |
+| school holiday | 492 | 12.12 | 4.93 | 4.00 | +0.69 |
+| public holiday | 36 | 52.54 | 5.12 | 4.49 | +2.11 |
+| day T−2 was a holiday (misleading reference) | 48 | 22.21 | 6.01 | 6.60 | −3.69 |
+| Christmas period | 60 | 27.96 | 6.13 | 6.59 | −1.68 |
+| bridge day | 6 | 8.47 | 5.50 | 5.34 | −0.06 |
+| half holiday (e.g. Sechseläuten, Knabenschiessen) | 6 | 36.67 | 10.45 | 7.72 | +7.59 |
+
+The best model handles holidays themselves well, but on the days *after* a holiday (when the reference day was a
+holiday) and around Christmas it is slightly worse than the level LightGBM and forecasts too low. Blending in
+the level model on such days is the obvious next improvement (not done, to keep the October test untouched).
 """
 
+NOTES_DRIVERS = """## Top-10 drivers (single columns, permutation importance on Sept + Oct 2026)
+1. **`demand_lag_2d_same_block`** – demand of the same block on the last known day (D−1); it is the reference the
+   model scales, so shuffling it destroys the forecast.
+2. **`block`** – time of day: the ratio to the reference day differs between night, office hours and evening.
+3. **`is_working_day`** – whether delivery day is a working day (not weekend, not public holiday); offices and
+   businesses drive the daytime load.
+4. **`weekday`** – Monday vs Friday vs weekend; together with the reference day's weekday it tells how big the
+   jump from the reference day is.
+5. **`radiation_wm2`** – forecast solar radiation of the block; sunshine lowers the grid load in daytime blocks
+   (rooftop solar behind the meter, less lighting).
+6. **`demand_dm1_block_2`** – yesterday's 08–12 block: a clean measure of the most recent working-day level.
+7. **`radiation_obs_same_block_lag_2d`** – how sunny the reference day was: a sunny reference day had lower load,
+   so the model corrects upwards if tomorrow is cloudy (and vice versa).
+8. **`lag2d_is_weekend`** – the reference day was a weekend day, so the ratio to a working day is large.
+9. **`demand_mean_same_block_same_weekday_4w`** – typical level of this block on this weekday in the last 4 weeks;
+   an anchor that is not affected by a single odd day.
+10. **`heating_degree`** – how far the forecast temperature is below 15 °C; electric heating and heat pumps raise
+    the load on cold days (small in October, more important in winter).
+
+### The driver groups asked for in the brief
+* **EVs:** the EV and charging columns add nothing measurable (group importance ≈ 0.00 MW; without them the
+  single-LightGBM MAE was even slightly lower, 3.29 → 3.16 in Sept, 3.63 → 3.53 in Oct). They grow smoothly over
+  years, and that slow trend is already in the recent demand lags.
+* **Weather:** the most important group after past demand and the calendar (shuffling all weather columns adds
+  7.0 MW of MAE; without weather inputs the single LightGBM goes from 3.29 to 7.41 MW in September). Solar
+  radiation matters most, temperature less in this mild season.
+* **Solar:** the lagged Swiss solar production (Energy-Charts) adds almost nothing (0.03 MW); the solar effect on
+  city load is captured through the radiation forecast for the delivery day.
+* **Holidays:** essential - the holiday/school-holiday group adds 9.5 MW of MAE when shuffled. On public holidays
+  the model is ten times better than the naive forecast (4.5 vs 52.5 MW); the weak spot is the day after a holiday.
+* **Events:** big events and FC Zürich / GC home games have no measurable effect on 4-hour city load (importance
+  ≤ 0; removing them changes MAE by less than the seed noise).
+* **Data delay:** if demand of D−1 were not yet available (only D−2), the MAE would rise from 3.29 to 3.93 MW in
+  September and from 3.63 to 4.70 MW in October (single LightGBM).
+"""
+
+NOTES_LIMITS = """## Limitations
+* **Weather in training:** before 2024-01-21 the weather inputs are observed values (no forecast archive); only
+  the last ~2.7 years use real ICON forecasts. The model therefore may trust the weather a little too much. The
+  test months use real forecasts, so the reported test errors are honest.
+* **Short test months:** one month = 30–31 days, so the 95 % CI of the test MAE is about ±0.5 MW. The DM test of
+  best vs plain LightGBM is significant on September and in the 11-month rolling backtest, but only borderline
+  on October alone (p ≈ 0.07).
+* **Prediction band:** the 10–90 % band contains 73–78 % of the actuals instead of 80 % - slightly too narrow.
+* **Refit dates:** as fixed by the protocol, the validation/test models are fit on data up to 31 Aug / 30 Sep,
+  although on the forecast day the very last of these days would not be known yet (one row of six in ~2900
+  days, no practical effect). The rolling backtest and the walk-forward experiment use the strict rule (≤ T−2).
+* **Days after holidays, Christmas and half-holidays** are the weakest cases (see table above).
+* **Importance:** permutation importance splits the credit between related columns (e.g. `weekday`,
+  `is_working_day`, `is_weekend`), so single numbers should be read together with the group table.
+"""
+
+
+# ----------------------------------------------------------------------------------------------
+# notebook
+# ----------------------------------------------------------------------------------------------
+def build_notebook():
+    """Write and execute notebooks/02_demand_model.ipynb (reads the saved outputs only)."""
+    import nbformat
+    from nbconvert.preprocessors import ExecutePreprocessor
+    from src.config import ROOT
+
+    md, code = nbformat.v4.new_markdown_cell, nbformat.v4.new_code_cell
+    cells = [
+        md("# 02 – Demand model (Zurich city load, day-ahead, 4-hour blocks)\n\n"
+           "Loads the outputs of `python -m src.models.demand` and shows the key tables and figures. "
+           "Details and the plain-language summary: `reports/model_notes_demand.md`."),
+        code("import os, sys\nsys.path.insert(0, os.path.abspath('..'))\nos.chdir(os.path.abspath('..'))\n"
+             "import pandas as pd, joblib\nfrom IPython.display import Image, display\n"
+             "import src.models.common as common\npd.set_option('display.precision', 3)"),
+        md("## Overall metrics (MW; MAPE in %)"),
+        code("met = pd.read_csv('reports/metrics_demand.csv', dtype={'block': str})\n"
+             "allm = met[met.block == 'all']\n"
+             "allm.pivot_table(index='model', columns='split', values=['mae', 'mape_or_smape'])"
+             ".reindex(['naive', 'linear', 'rf', 'gbm', 'best'])"),
+        md("## Test month (October 2026) with day-clustered bootstrap 95 % CI for the MAE"),
+        code("allm[allm.split == 'test'][['model', 'mae', 'rmse', 'mape_or_smape', 'bias', 'mae_ci_low', "
+             "'mae_ci_high']]"),
+        md("## MAE per block, test month"),
+        code("met[(met.split == 'test') & (met.block != 'all')].pivot(index='block', columns='model', values='mae')"),
+        md("## Diebold–Mariano tests (daily MAE; negative mean_diff = best is better)"),
+        code("pd.read_csv('reports/model_tests_demand.csv')"),
+        md("## Forecast vs actual, October 2026"),
+        code("display(Image('reports/figures/demand_test_forecast_vs_actual.png'))"),
+        code("display(Image('reports/figures/demand_model_ladder.png'))\n"
+             "display(Image('reports/figures/demand_error_by_block.png'))"),
+        md("## Prediction band coverage (should be about 80 % inside the 10–90 % band)"),
+        code("pr = pd.read_parquet('reports/predictions_demand.parquet')\n"
+             "pr['inside'] = (pr.y_true >= pr.pred_q10) & (pr.y_true <= pr.pred_q90)\n"
+             "pr.groupby('split').inside.mean()"),
+        md("## Drivers (permutation importance on Sep + Oct 2026)"),
+        code("display(pd.read_csv('reports/importance_groups_demand.csv'))\n"
+             "display(Image('reports/figures/demand_permutation_importance.png'))"),
+        md("## What was tried (September 2026 and time-series CV)"),
+        code("pd.read_csv('reports/experiments_demand.csv')"),
+        md("## The saved model predicts any rows of features.parquet"),
+        code("m = joblib.load('models/demand_best.joblib')\n"
+             "oct_rows = common.split_frame(common.load_features(), 'test')\n"
+             "out = oct_rows[['delivery_date', 'block', 'demand_mw']].copy()\n"
+             "out['forecast'] = m.predict(oct_rows)\nout.head(12)"),
+    ]
+    nb = nbformat.v4.new_notebook(cells=cells)
+    nb.metadata["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}
+    f = ROOT / "notebooks" / "02_demand_model.ipynb"
+    f.parent.mkdir(exist_ok=True)
+    ExecutePreprocessor(timeout=600, kernel_name="python3").preprocess(nb, {"metadata": {"path": str(f.parent)}})
+    nbformat.write(nb, f)
+    print(f"notebook written: {f}")
 
 # ----------------------------------------------------------------------------------------------
 # main
@@ -628,8 +778,22 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--tune", action="store_true", help="redo the hyper-parameter search (slow)")
     ap.add_argument("--experiments", action="store_true", help="redo the September variant comparison (slow)")
+    ap.add_argument("--notes-only", action="store_true", help="only rewrite the notes from saved outputs")
+    ap.add_argument("--notebook", action="store_true", help="only rebuild + execute the notebook")
     ap.add_argument("--skip-rolling", action="store_true", help="skip the rolling backtest (faster, for debugging)")
     args = ap.parse_args(argv)
+    if args.notebook:
+        build_notebook()
+        return
+    if args.notes_only:
+        rep = path("reports")
+        pred = pd.read_parquet(rep / "predictions_demand.parquet")
+        info = json.loads((rep / "run_info_demand.json").read_text())
+        write_notes(pd.read_csv(rep / "metrics_demand.csv", dtype={"block": str}),
+                    pd.read_csv(rep / "model_tests_demand.csv"), pd.read_csv(rep / "importance_demand.csv"),
+                    pd.read_csv(rep / "importance_groups_demand.csv"), quantile_coverage(pred), load_params(),
+                    info["runtime_seconds"])
+        return
     t_start = time.time()
     df = load_features()
     params = load_params()
@@ -698,6 +862,8 @@ def main(argv=None):
     plot_model_ladder(met, fig / "demand_model_ladder.png", "Demand: MAE per model and split", "MW")
 
     runtime = time.time() - t_start
+    with open(rep / "run_info_demand.json", "w") as fh:
+        json.dump({"runtime_seconds": round(runtime, 1), "finished": pd.Timestamp.now().isoformat()}, fh)
     write_notes(met, tests, imp, gimp, cov, params, runtime)
     allm = met[met["block"] == "all"].pivot(index="model", columns="split", values="mae")
     print(allm.round(3).to_string())
@@ -706,4 +872,7 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    # Import the module under its real name so that pickled classes (DemandExtras) are saved as
+    # `src.models.demand.DemandExtras`, not `__main__.DemandExtras` (which the app could not load).
+    from src.models import demand as _demand
+    _demand.main()

@@ -147,7 +147,7 @@ Variables: `temp_c` (°C), `radiation_wm2` (W/m²), `sunshine_min` (min per hour
 | co2_staleness_days | days | day D − date of that auction (large in the January auction break) |
 | eurchf_d_1 | CHF per EUR | latest ECB reference rate (≤ D−1) |
 | clean_gas_cost | EUR/MWh_el | gas_ttf_d_1 / 0.5 + 0.37 × co2_eua_d_1 (CCGT short-run cost proxy, 50 % efficiency, 0.37 tCO₂/MWh_el) |
-| reservoir_fill_pct | % | latest published Swiss reservoir fill (BFE, Sunday value, public Wednesday 18:00) |
+| reservoir_fill_pct | % | latest published Swiss reservoir fill (BFE, level of Sunday night, counted as public from Thursday 23:59) |
 | reservoir_vs_median_pct | %-points | same row: fill − median of the same ISO week in earlier years |
 | reservoir_change_1w | %-points | reservoir_fill_pct − previous published week |
 

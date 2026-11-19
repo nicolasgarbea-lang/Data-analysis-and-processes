@@ -1,0 +1,28 @@
+experiment,kind,val_mae,val_mape,val_bias,cv_mae,cv_mae_last2,test_mae,test_mape
+A  LightGBM log-ratio vs 2-day lag (1 seed),variant,3.2921,1.1157,-0.2390,4.6063,4.6131,,
+A0 LightGBM on the level,variant,3.8483,1.3383,-0.7909,6.4060,4.9987,,
+A1 log-ratio vs 7-day lag,variant,3.8980,1.3626,-0.9814,5.8760,5.5941,,
+A2 difference vs 2-day lag,variant,3.4224,1.1696,-0.3476,4.5932,4.6288,,
+A3 difference vs 4-week same-weekday mean,variant,3.9466,1.4090,-1.2765,6.7376,5.6026,,
+B1 L1 loss,variant,3.3134,1.1289,-0.3293,4.8826,4.9479,,
+B2 Huber loss,variant,3.1872,1.0819,-0.9747,4.7836,4.7204,,
+C1 recency half-life 1 y,variant,4.0638,1.4003,-0.2465,4.7591,4.8314,,
+C2 recency half-life 2 y,variant,3.4503,1.1694,0.0822,4.6641,4.6871,,
+C3 recency half-life 3 y,variant,3.3838,1.1447,0.3033,4.6386,4.6485,,
+C4 COVID lockdown weight 0.1,variant,3.3854,1.1426,-0.0329,5.3753,4.7374,,
+D1 weather: forecast-era rows weight 2,weather,3.3898,1.1450,-0.0327,4.6197,4.6466,,
+D2 weather: JMA forecasts for all years,weather,3.8189,1.2946,-0.2756,4.9799,4.8337,,
+D3 weather: ICON hybrid + JMA columns,weather,3.4354,1.1774,-0.9657,4.6375,4.5920,,
+"D4 ORACLE weather (observed, NOT achievable)",weather,3.0109,1.0321,-0.1847,4.2577,3.7524,,
+E1 no extra features (temp/radiation vs lag day),variant,3.3705,1.1421,-0.2634,4.6315,4.5995,,
+F1 5 seeds,ensemble,3.2428,1.0951,-0.2733,,,,
+F2 5 seeds + ridge 15 %,ensemble,3.2018,1.0782,0.0805,,,,
+F3 5 seeds + ridge 30 %,ensemble,3.2197,1.0818,0.4343,,,,
+"G0 1 seed + ridge, fit once",walk-forward,3.2447,1.0970,0.1096,,,,
+"G1 1 seed + ridge, daily walk-forward refit",walk-forward,3.1781,1.0718,0.3792,,,,
+"S0 sensitivity base (1 seed, all features)",sensitivity,3.2921,1.1157,-0.2390,,,3.6291,1.2024
+S1 demand one day later (no D−1 demand),sensitivity,3.9335,1.3575,-1.7200,,,4.6980,1.5223
+S2 without EV features,sensitivity,3.1557,1.0579,0.0644,,,3.5285,1.1681
+S3 without event/football features,sensitivity,3.2633,1.1028,-0.1069,,,3.4718,1.1513
+S4 without weather,sensitivity,7.4108,2.4806,4.9895,,,6.4939,2.1239
+S5 without solar (lagged Swiss solar),sensitivity,3.2554,1.1113,-0.5401,,,3.5443,1.1737

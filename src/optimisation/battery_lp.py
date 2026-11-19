@@ -136,6 +136,12 @@ def solve_battery_plan(
 
     soc0 = battery.soc_start if soc_start_mwh is None else float(soc_start_mwh)
     soc_end = soc0 if soc_end_mwh is None else float(soc_end_mwh)
+    if not (battery.soc_min - 1e-6 <= soc0 <= battery.soc_max + 1e-6):
+        raise ValueError(
+            f"start charge level {soc0:.2f} MWh is outside the allowed range "
+            f"{battery.soc_min:.2f}-{battery.soc_max:.2f} MWh"
+        )
+    soc0 = min(max(soc0, battery.soc_min), battery.soc_max)
     eta_c, eta_d = battery.eta_charge, battery.eta_discharge
     max_e = battery.power_mw * h  # most energy the battery can move in each period
 
@@ -208,6 +214,9 @@ def solve_battery_plan(
         constraints=LinearConstraint(np.vstack(rows), np.concatenate(lo), np.concatenate(hi)),
         bounds=Bounds(lower, upper),
         integrality=integrality,
+        # solve to (practically) exact optimality: the battery saving is tiny next to the
+        # city's whole purchase bill, so the default 0.01 % gap would be too loose
+        options={"mip_rel_gap": 0.0},
     )
     if not res.success:
         raise RuntimeError(f"battery plan could not be solved: {res.message}")

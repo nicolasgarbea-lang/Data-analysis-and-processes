@@ -1,0 +1,64 @@
+{
+  "seed": 42,
+  "linear_ladder": {
+    "alpha": 10.0
+  },
+  "rf_ladder": {
+    "n_estimators": 150,
+    "max_depth": 14,
+    "min_samples_leaf": 5,
+    "max_features": 0.4
+  },
+  "gbm_ladder": {
+    "learning_rate": 0.03,
+    "n_estimators": 1500,
+    "num_leaves": 31,
+    "min_child_samples": 20,
+    "subsample": 0.8,
+    "subsample_freq": 1,
+    "colsample_bytree": 0.7,
+    "reg_lambda": 0.0
+  },
+  "best": {
+    "transform": "logratio",
+    "reference_col": "demand_lag_2d_same_block",
+    "weather": "hybrid",
+    "extra_features": [
+      "temp_vs_lag2",
+      "rad_vs_lag2"
+    ],
+    "drop_features": [],
+    "gbm_params": {
+      "learning_rate": 0.03,
+      "n_estimators": 1500,
+      "num_leaves": 31,
+      "min_child_samples": 20,
+      "subsample": 0.8,
+      "subsample_freq": 1,
+      "colsample_bytree": 0.7,
+      "reg_lambda": 0.0
+    },
+    "n_seeds": 5,
+    "objective": "l2",
+    "linear_weight": 0.15,
+    "linear_alpha": 10.0,
+    "half_life_years": null,
+    "forecast_row_weight": 1.0,
+    "covid_weight": 1.0,
+    "walk_forward": false,
+    "quantiles": [
+      0.1,
+      0.5,
+      0.9
+    ],
+    "quantile_params": {
+      "learning_rate": 0.03,
+      "n_estimators": 600,
+      "num_leaves": 15,
+      "min_child_samples": 40,
+      "subsample": 0.8,
+      "subsample_freq": 1,
+      "colsample_bytree": 0.7
+    }
+  }
+}
