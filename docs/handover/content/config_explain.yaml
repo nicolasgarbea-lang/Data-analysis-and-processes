@@ -1,0 +1,48 @@
+# Plain-language explanation of each config.yaml key (used by Appendix B of the handover report).
+timezone: all local-time logic (blocks, calendar, forecast time) uses this time zone; data is stored in UTC
+auction: when the Swiss day-ahead auction closes and when we forecast
+auction.gate_closure_local: deadline for bids on day D (local time)
+auction.forecast_time_local: the forecast issue time on day D; every input must be published before it. Changing it needs the weather-forecast loaders re-run (they pick the run per hour from this time)
+periods: the dates that define training, validation, test and the rolling run. Changing them alone does not extend the data or the feature table (end dates are also in the loaders, build_features.py and the models' rolling run; chapter 16)
+periods.raw_start: first day of raw data
+periods.raw_end: last day of raw data used
+periods.train_end: last delivery day used for training before validation
+periods.val_start: first day of the validation month (model choices are made here)
+periods.val_end: last day of the validation month
+periods.test_start: first day of the test month (evaluated once)
+periods.test_end: last day of the test month
+periods.rolling_start: first day of the rolling-origin backtest and of the decision-tuning period
+periods.test2_start: start of a January 2026 row filter (`test2` in src/models/common.py, not used by any run). January is inside the rolling run and the decision tuning, so it is a winter slice of the replay, not an independent test
+periods.test2_end: end of that January row filter
+blocks: the six local-clock blocks [start hour, end hour) of a delivery day
+battery: the fictional battery
+battery.power_mw: maximum charge or discharge power
+battery.capacity_mwh: energy capacity (with 20 MW a 2-hour battery)
+battery.soc_min_frac: lowest allowed charge level, share of capacity
+battery.soc_max_frac: highest allowed charge level, share of capacity
+battery.soc_start_frac: charge level at the start of each evaluation period and the end-of-day target of every plan; the actual end level is carried into the next day (target relaxed to the opening level only if infeasible).
+battery.round_trip_efficiency: share of stored energy that comes back; split as its square root on the way in and out
+battery.max_cycles_per_day: cap on discharge per day in units of (soc_max − soc_min) × capacity delivered
+battery.wear_cost_eur_per_mwh: assumed ageing cost per MWh discharged; enters the plan and the bill
+battery.allow_sell: whether the DSO may sell energy back (off; a sensitivity shows no change)
+bidding: decision defaults; the backtest overrides them with the tuned settings
+bidding.charge_limit_factor: limit price of a charge bid = expected discharge price × this − wear cost
+bidding.min_spread_eur_mwh: extra margin the expected spread must cover before the battery cycles (plan only)
+bidding.plan_resolution: block = plan the 6 blocks; hourly_shape = plan 24 h with an hourly price shape (tuned choice)
+bidding.shape_days: how many past days form the hourly price shape
+bidding.shape_daytype: use only past days of the same type (workday vs weekend/holiday) for the shape
+bidding.use_limit: false = charge bids buy at any price
+bidding.limit_rule: factor, or quantile (caps the limit at the 90 % price forecast)
+bidding.protect: none, or at_risk_bid (extra price-independent bid for discharge that depends on an uncleared charge)
+imbalance: assumed imbalance prices (not Swissgrid's)
+imbalance.shortage_price_factor: shortage costs p + (factor − 1) × |p| per MWh
+imbalance.surplus_price_factor: surplus earns p − (1 − factor) × |p| per MWh
+paths: where the data and results live, relative to the project folder
+paths.raw: raw downloads (not in git)
+paths.manual: hand-made inputs
+paths.processed: clean tables
+paths.features: the feature table
+paths.models: trained models and frozen settings
+paths.reports: results
+paths.figures: figures
+random_seed: seed for every random step (models, bootstraps)

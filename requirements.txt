@@ -27,6 +27,7 @@ fastapi==0.165.0
 fastjsonschema==2.22.3
 fonttools==4.68.0
 formulaic==1.2.2
+greenlet==3.5.6
 h11==0.16.0
 holidays==0.109
 httpcore==1.0.9
@@ -51,6 +52,7 @@ kiwisolver==1.5.1
 lightgbm==4.7.0
 logistro==2.0.1
 mako==1.4.3
+markdown==3.11.3
 markupsafe==3.0.4
 matplotlib==3.11.2
 matplotlib-inline==0.2.2
@@ -72,13 +74,12 @@ patsy==1.0.3
 pexpect==4.9.0
 pillow==13.0.0
 platformdirs==4.14.7
-plotly==7.1.0
+playwright==1.65.2
 pluggy==1.7.0
 prompt-toolkit==3.0.53
 protobuf==7.36.2
 psutil==7.2.2
 ptyprocess==0.7.0
-pulp==3.3.2
 pure-eval==0.2.4
 pyarrow==26.0.1
 pycparser==3.12
@@ -87,6 +88,7 @@ pydantic-core==2.50.5
 pydeck==0.9.3
 pygments==2.21.0
 pyparsing==3.3.3
+pypdf==7.1.1
 pytest==9.2.0
 python-dateutil==2.9.0.post0
 python-multipart==0.0.34

@@ -10,8 +10,8 @@ Endpoints (JSON shapes: ``web/src/data/types.ts``):
 * ``POST /api/plan``   body ``PlanRequest``  -> ``DayPlan`` of the product for that day with the given
   battery (``split = "custom"``). Built by the same function as the exported day files
   (``src.export.export_web.build_day_plan``).
-  Start charge level = the level the stored default-battery backtest had at the start of that day (MWh),
-  clipped into the new battery's allowed range [soc_min_frac, soc_max_frac] x capacity.
+  Start charge level = the same SHARE of capacity that the default battery had at the start of that day in the
+  stored backtest, clipped into the new battery's allowed range [soc_min_frac, soc_max_frac] x capacity.
   ``soc_start_frac`` is the level the plan returns to at the end of the day (as in the backtest); it is
   clipped into the same range, and the clipped value is returned in ``battery``.
 * ``POST /api/month``  body ``MonthRequest`` -> ``MonthResult`` for the test month (October 2026): baseline,

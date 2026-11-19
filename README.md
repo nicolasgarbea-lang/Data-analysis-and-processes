@@ -2,6 +2,9 @@
 
 University group project (HSG, *Business Analytics & Data Science Applications*, HS 2026).
 
+**New to the project? Start with the handover report:** [`reports/Project_Handover_Report.pdf`](reports/Project_Handover_Report.pdf)
+(every step, every decision and why, and how to run and change it). Short version: [`PITCH.md`](PITCH.md).
+
 **Limmat Energie AG** is a fictional distribution system operator (DSO) that supplies the city of Zurich (its demand
 is the real ewz grid load of the city) and owns a fictional 20 MW / 40 MWh grid battery. Every day at 10:00, one hour
 before the Swiss day-ahead auction closes, the project
@@ -106,7 +109,7 @@ project folder.
 forecast time and rebuilds the features; it does not replay from the raw downloads. The raw-to-processed step is
 covered by the loader tests and `reports/data_checks.md`.
 
-Tests (159 tests):
+Tests (172 tests):
 
 ```bash
 .venv/bin/python -m pytest
@@ -137,12 +140,11 @@ Report tables (check that every table in the report matches the result files):
 
 ## Before you publish
 
-The repository has **not** been pushed or deployed. Before any public push or app deployment the team must decide on
-two data licences: Yahoo Finance data (`TTF=F`, gas) is for personal/educational use, and EEX auction data is for
+The repository is on GitHub (public) but the app is not deployed. The team must still decide on two data licences: Yahoo Finance data (`TTF=F`, gas) is for personal/educational use, and EEX auction data is for
 research use. Processed series and feature columns derived from them are tracked in git
 (`data/processed/gas_ttf_daily.parquet`, `co2_eua_daily.parquet`, `features.parquet`), and the app plots the gas
 series. The clean fix is to replace the gas (and, if needed, CO₂) series with an HSG LSEG/Bloomberg export and to
-rebuild; until then keep the repository private.
+rebuild. Until that is decided, consider making the repository private and do not deploy the app publicly.
 
 ## Deploy the app
 

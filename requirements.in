@@ -5,7 +5,6 @@ requests
 scikit-learn
 lightgbm
 scipy
-pulp
 holidays
 openpyxl
 joblib
@@ -23,3 +22,6 @@ tabulate
 fastapi
 uvicorn
 httpx
+markdown
+playwright
+pypdf

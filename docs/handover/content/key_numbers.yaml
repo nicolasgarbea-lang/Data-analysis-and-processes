@@ -1,0 +1,59 @@
+# Key numbers sheet (Appendix E). `key` = a key of numbers() in docs/handover/build.py.
+- {label: "Demand MAE, best model, October 2026", key: dem_test_mae_best, unit: MW, file: reports/metrics_demand.csv, how: "split=test, model=best, block=all, column mae"}
+- {label: "Demand MAPE, best model, October", key: dem_test_pct_best, unit: "%", file: reports/metrics_demand.csv, how: "same row, column mape_or_smape"}
+- {label: "Demand MAE, naive, October", key: dem_test_mae_naive, unit: MW, file: reports/metrics_demand.csv, how: "split=test, model=naive, block=all"}
+- {label: "Demand MAE, best, September", key: dem_val_mae_best, unit: MW, file: reports/metrics_demand.csv, how: "split=val, model=best"}
+- {label: "Demand MAE, best, rolling period", key: dem_roll_mae_best, unit: MW, file: reports/metrics_demand.csv, how: "split=rolling, model=best"}
+- {label: "Demand October 95 % CI of MAE (low)", key: dem_test_ci_low, unit: MW, file: reports/metrics_demand.csv, how: "column mae_ci_low"}
+- {label: "Demand October 95 % CI of MAE (high)", key: dem_test_ci_high, unit: MW, file: reports/metrics_demand.csv, how: "column mae_ci_high"}
+- {label: "Price MAE, best model, October 2026", key: pri_test_mae_best, unit: EUR/MWh, file: reports/metrics_price.csv, how: "split=test, model=best, block=all, column mae"}
+- {label: "Price sMAPE, best, October", key: pri_test_pct_best, unit: "%", file: reports/metrics_price.csv, how: "column mape_or_smape"}
+- {label: "Price MAE, naive, October", key: pri_test_mae_naive, unit: EUR/MWh, file: reports/metrics_price.csv, how: "model=naive"}
+- {label: "Price bias, best, October", key: pri_test_bias_best, unit: EUR/MWh, file: reports/metrics_price.csv, how: "column bias"}
+- {label: "Price MAE, best, rolling period", key: pri_roll_mae_best, unit: EUR/MWh, file: reports/metrics_price.csv, how: "split=rolling"}
+- {label: "DM test best vs gbm, price, rolling (p)", key: dm_pri_roll_gbm_p, file: reports/model_tests_price.csv, how: "split=rolling, model_b=gbm, column p_value"}
+- {label: "Baseline total cost, October (strategy 1)", key: s1_cost_test, unit: CHF, file: reports/backtest_summary.csv, how: "split=test, strategy=baseline_naive_no_battery, total_cost_chf"}
+- {label: "Product total cost, October (strategy 4)", key: s4_cost_test, unit: CHF, file: reports/backtest_summary.csv, how: "strategy=ml_battery, total_cost_chf"}
+- {label: "Product saving vs baseline, October (inventory-adjusted)", key: total_saving_chf_test, unit: CHF, file: reports/backtest_decomposition.csv, how: "split=test, total_saving_chf"}
+- {label: "… from the demand forecast", key: demand_forecast_part_chf_test, unit: CHF, file: reports/backtest_decomposition.csv, how: "demand_forecast_part_chf (1 − 2)"}
+- {label: "… from the battery", key: battery_part_chf_test, unit: CHF, file: reports/backtest_decomposition.csv, how: "battery_part_chf (2 − 4)"}
+- {label: "… battery, plain block plan", key: block_default_battery_part_chf_test, unit: CHF, file: reports/backtest_decomposition.csv, how: "block_default_battery_part_chf (2 − 4b)"}
+- {label: "… battery, hourly shaping and tuning", key: tuning_and_shaping_part_chf_test, unit: CHF, file: reports/backtest_decomposition.csv, how: "tuning_and_shaping_part_chf (4b − 4)"}
+- {label: "Saving as share of the baseline's total cost", key: pct_saving_of_baseline_test, unit: "%", file: [reports/backtest_decomposition.csv, reports/backtest_summary.csv], how: "total_saving_chf (decomposition, split=test) ÷ total_cost_chf of strategy 1 (summary)"}
+- {label: "Share of the benchmark (strategy 6) saving captured, October", key: pct_ceiling_captured_total_test, unit: "%", file: reports/backtest_decomposition.csv, how: "pct_ceiling_captured_total"}
+- {label: "Share of the benchmark's (strategy 6) battery value captured", key: pct_ceiling_battery_value_captured_test, unit: "%", file: reports/backtest_decomposition.csv, how: "pct_ceiling_battery_value_captured"}
+- {label: "Benchmark (strategy 6) saving, October", key: ceiling_total_saving_chf_test, unit: CHF, file: reports/backtest_decomposition.csv, how: "ceiling_total_saving_chf"}
+- {label: "Block-rule cost (5 → 6), October", key: block_rule_cost_chf_test, unit: CHF, file: reports/backtest_decomposition.csv, how: "block_rule_cost_chf"}
+- {label: "… finer dispatch (5 → 5b)", key: finer_dispatch_part_chf_test, unit: CHF, file: reports/backtest_decomposition.csv, how: "finer_dispatch_part_chf"}
+- {label: "… inter-day flexibility (5b → 6)", key: interday_flexibility_part_chf_test, unit: CHF, file: reports/backtest_decomposition.csv, how: "interday_flexibility_part_chf"}
+- {label: "95 % CI of the saving, independent days (low)", key: s4_cilow_test, unit: CHF, file: reports/backtest_summary.csv, how: "saving_adj_ci_low_chf"}
+- {label: "95 % CI of the saving, independent days (high)", key: s4_cihigh_test, unit: CHF, file: reports/backtest_summary.csv, how: "saving_adj_ci_high_chf"}
+- {label: "95 % CI, block bootstrap (low)", key: ciblock_low_test, unit: CHF, file: reports/backtest_ci_sensitivity.csv, how: "split=test, ci_block_low_chf"}
+- {label: "95 % CI, block bootstrap (high)", key: ciblock_high_test, unit: CHF, file: reports/backtest_ci_sensitivity.csv, how: "ci_block_high_chf"}
+- {label: "Lag-1 autocorrelation of daily saving, October", key: autocorr_test, file: reports/backtest_ci_sensitivity.csv, how: "lag1_autocorr_daily_saving"}
+- {label: "Imbalance penalty, baseline, October", key: s1_penalty_test, unit: CHF, file: reports/backtest_summary.csv, how: "imbalance_penalty_chf"}
+- {label: "Imbalance penalty, product, October", key: s4_penalty_test, unit: CHF, file: reports/backtest_summary.csv, how: "imbalance_penalty_chf"}
+- {label: "Imbalance settlement, product, October", key: s4_imbcost_test, unit: CHF, file: reports/backtest_summary.csv, how: "imbalance_cost_chf"}
+- {label: "Cycles, product, October", key: s4_cycles_test, file: reports/backtest_summary.csv, how: "cycles (32 MWh delivered = 1)"}
+- {label: "Charge volume cleared, product, October", key: s4_cleared_test, unit: "%", file: reports/backtest_summary.csv, how: "share_charge_cleared × 100"}
+- {label: "Hourly charge bids cleared (count)", key: charge_bids_cleared, file: reports/backtest_hourly_test.parquet, how: "strategy=ml_battery, charge_bid_mwh>0 and charge_cleared_mwh>0"}
+- {label: "Days the product beat the baseline, October", key: s4_cheaper_test, file: reports/backtest_summary.csv, how: "days_cheaper_than_baseline"}
+- {label: "Saving with imbalance factors 1.1/0.9", key: imb_11_09_saving, unit: CHF, file: reports/backtest_decision_sensitivity.csv, how: "parameter=imbalance_factors, value=1.1/0.9"}
+- {label: "… demand part at 1.1/0.9", key: imb_11_09_demand, unit: CHF, file: reports/backtest_decision_sensitivity.csv, how: "demand_forecast_part_chf"}
+- {label: "Saving with imbalance factors 1.5/0.5", key: imb_15_05_saving, unit: CHF, file: reports/backtest_decision_sensitivity.csv, how: "value=1.5/0.5"}
+- {label: "Price-error slope (random noise, perfect demand)", key: pe_slope, unit: "CHF per EUR/MWh per month", file: reports/backtest_price_error_sensitivity.csv, how: "slope_chf_per_eur"}
+- {label: "Battery saving lost by the ML price forecast", key: pe_ml_lost, unit: CHF, file: reports/backtest_price_error_sensitivity.csv, how: "forecast=ml, lost_saving_chf"}
+- {label: "Battery value per MWh of capacity (min)", key: bs_per_mwh_min, unit: CHF, file: reports/backtest_battery_sensitivity.csv, how: "strategy=ml_battery, battery_value_chf ÷ capacity_mwh"}
+- {label: "Battery value per MWh of capacity (max)", key: bs_per_mwh_max, unit: CHF, file: reports/backtest_battery_sensitivity.csv, how: "same"}
+- {label: "Saving, rolling period", key: total_saving_chf_roll, unit: CHF, file: reports/backtest_decomposition.csv, how: "split=rolling, total_saving_chf"}
+- {label: "Saving, September 2026", key: total_saving_chf_val, unit: CHF, file: reports/backtest_decomposition.csv, how: "split=val, total_saving_chf"}
+- {label: "One-year sum (rolling + September) – not a test", key: year_saving, unit: CHF, file: reports/backtest_decomposition.csv, how: "rolling + val, total_saving_chf"}
+- {label: "… battery part of the one-year sum", key: year_battery, unit: CHF, file: reports/backtest_decomposition.csv, how: "rolling + val, battery_part_chf"}
+- {label: "Tuning gain of the hourly shape vs block plan", key: tune_gain, unit: CHF, file: reports/decision_tuning.csv, how: "stage 1 winner, vs_reference_chf"}
+- {label: "Feature table rows", key: feat_rows, file: data/processed/features.parquet, how: "parquet metadata"}
+- {label: "Feature table columns", key: feat_cols, file: data/processed/features.parquet, how: "parquet metadata"}
+- {label: "Mean Zurich demand, October 2026", key: oct_mean_demand, unit: MW, file: data/processed/hourly_actuals.parquet, how: "mean demand_mw over October delivery days"}
+- {label: "ewz/Netzebenen correlation at shift 0", key: ewz_corr_0, file: reports/data_checks/demand_ewz_crosscheck.md, how: "cross-check table, +0 min"}
+- {label: "Demand model runtime (last run)", key: rt_demand, unit: min, file: reports/model_notes_demand.md, how: "last line"}
+- {label: "Price model runtime (last run)", key: rt_price, unit: min, file: reports/model_notes_price.md, how: "last line"}
+- {label: "Tests collected by pytest", key: n_tests, file: tests/, how: "pytest --collect-only at build time"}

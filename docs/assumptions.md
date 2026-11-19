@@ -22,7 +22,7 @@ marked *(updated)*.
 - Swiss Energy-Charts load and generation known up to the end of D−1. – Near real-time source, one day margin.
 - Observed weather usable if the hour ends ≤ 09:00 local on D. – One hour publication margin.
 - Gas close of day T known from T 18:00; CO₂ auction result from auction day 12:00; ECB EUR/CHF from date 16:00. – Settlement / publication times of each source.
-- Reservoir level of Sunday 24:00 known from **Thursday 23:59**, first used on Friday *(updated: the D4 table in `docs/auction_timing.md` still says Wednesday 18:00; the code and the drivers fragment use Thursday after the Phase 1 review)*. – The federal energy dashboard states Thursday publication.
+- Reservoir level of Sunday 24:00 known from **Thursday 23:59**, first used on Friday *(updated after the Phase 1 review; was Wednesday 18:00)*. – The federal energy dashboard states Thursday publication.
 - Stadt Zürich EV count of 30 Sept of year Y public from 1 Aug of Y+1; BFE monthly charging data of month M public from the 15th of M+1. – Observed update dates plus a safety margin.
 - EV and charging features are joined **as of the forecast day D** using the `_known` columns *(updated after the Phase 1 review; before they were joined by delivery day)*. – Only values published by D may be used.
 - Calendar, holidays, school holidays, events and football fixtures are known in advance. – Announced months ahead.

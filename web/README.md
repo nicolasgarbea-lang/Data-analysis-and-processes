@@ -42,7 +42,7 @@ bun run preview    # serve the build on http://localhost:4173
 |---|---|
 | `src/data/types.ts` | the data contract: every JSON shape the Python exporter writes |
 | `src/data/api.ts` | loading the JSON files and calling the planning service (TanStack Query) |
-| `src/main.tsx` | the frame and the five routes (TanStack Router) |
+| `src/main.tsx` | the frame and the four routes (TanStack Router) |
 | `src/routes/` | one file per page |
 | `src/charts/DayRail.tsx` | the day at a glance: decision, price, battery, charge level, demand on one time axis |
 | `src/charts/Charts.tsx` | line, bar, stacked column and heat-map charts |
