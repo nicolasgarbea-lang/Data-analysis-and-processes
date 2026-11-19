@@ -8,9 +8,9 @@ following MONDAY (= Sunday 24:00 = Monday 00:00), e.g. 2026-11-16.
 Publication: weekly. The HTTP Last-Modified header of the file on 2026-11-19 was
 Tue 2026-11-17 14:22 GMT, i.e. the value for Sunday 15 Nov 24h appeared on Tuesday afternoon.
 We do not have a documented release calendar, so we assume (conservatively) the value is
-known from WEDNESDAY 18:00 Europe/Zurich after the Sunday measurement
-(available_from_utc = Datum + 2 days, 18:00 local). With forecasts at 10:00 this means the
-week's value is first used on Thursday.
+known from the end of THURSDAY after the Sunday measurement
+(available_from_utc = Datum + 3 days, 23:59 local = Thursday end of day, the publication day stated on energiedashboard.admin.ch). With forecasts at 10:00 this means the
+week's value is first used on Friday.
 
 Extra columns:
 - reservoir_median_pct_same_week: median fill % of the same ISO week in all years STRICTLY
@@ -69,7 +69,7 @@ def main(skip_download: bool = False, force: bool = False) -> pd.DataFrame:
     df["reservoir_median_pct_same_week"] = median_same_week_before(df)
     df["reservoir_vs_median_pct"] = df.reservoir_fill_pct - df.reservoir_median_pct_same_week
     df = df.rename(columns={"week": "iso_week"}).drop(columns="year")
-    df["available_from_utc"] = local_time_to_utc(df["measure_date"], "18:00", days_offset=2)
+    df["available_from_utc"] = local_time_to_utc(df["measure_date"], "23:59", days_offset=3)
     df.to_parquet(processed_path("reservoir_weekly"), index=False)
 
     wd = pd.to_datetime(df.measure_date).dt.day_of_week.value_counts().to_dict()
@@ -81,7 +81,7 @@ def main(skip_download: bool = False, force: bool = False) -> pd.DataFrame:
         f"fill % range: {df.reservoir_fill_pct.min():.1f} – {df.reservoir_fill_pct.max():.1f}; "
         f"max capacity changes over time: {sorted(df.reservoir_max_gwh_ch.unique().tolist())}",
         f"missing: {df.isna().sum()[df.isna().sum() > 0].to_dict()} (median is NaN for year 2000: no earlier history)",
-        "available_from_utc = measure_date (Monday) + 2 days at 18:00 Europe/Zurich (assumption; file was "
+        "available_from_utc = measure_date (Monday) + 3 days at 23:59 Europe/Zurich = Thursday end of day (the federal energy dashboard states Thursday publication; file was "
         "last modified Tue 2026-11-17 14:22 GMT for the 2026-11-16 value)",
     ]
     write_check("reservoir_weekly", lines)

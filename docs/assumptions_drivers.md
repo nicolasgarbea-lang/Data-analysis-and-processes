@@ -17,7 +17,7 @@ One line per assumption, with the reason.
 - **CO₂ auction result known from auction day 12:00 Europe/Zurich.** Bidding closes 11:00, results within 15 minutes (EU Auctioning Regulation).
 - **Primary auction prices are a proxy for the secondary EUA market (ICE futures).** Auction prices clear close to secondary spot; secondary-market data would need LSEG/ICE access.
 - **Reservoir `measure_date` (Mondays in the file) = level on the preceding Sunday at 24:00.** opendata.swiss title "Füllungsgrad der Speicherseen, Sonntag 24h"; all file dates are Mondays.
-- **Reservoir value known from Wednesday 18:00 Europe/Zurich (measure_date + 2 days).** Only one observation of the release time (file Last-Modified Tue 17 Nov 2026 15:22 CET); Wednesday evening adds a safety margin. First used by the Thursday 10:00 forecast.
+- **Reservoir value known from Thursday 23:59 Europe/Zurich (measure_date + 3 days).** The federal energy dashboard (energiedashboard.admin.ch) states Thursday publication without an hour, so we take the end of Thursday. First used by the Friday 10:00 forecast. (Changed after the Phase 1 review; before it was Wednesday 18:00.)
 - **`reservoir_fill_pct` = Swiss total GWh ÷ Swiss maximum GWh of the same row.** The maximum changes over time (8,500 → 8,900 GWh) as dams are raised.
 - **`reservoir_median_pct_same_week` uses only years strictly before the row's ISO year, same ISO week (week 53 → week 52 if no history).** Avoids look-ahead; the year 2000 has no history (NaN), from 2001 it is filled.
 - **EUR/CHF ECB rate of date T known from T 16:00 Europe/Zurich.** ECB publishes the reference rate around 16:00 CET; no rates on weekends/TARGET holidays (as-of join).

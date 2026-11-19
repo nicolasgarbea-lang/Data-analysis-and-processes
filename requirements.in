@@ -22,3 +22,4 @@ optuna
 kaleido
 curl_cffi
 xlrd
+tabulate

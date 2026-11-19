@@ -20,7 +20,7 @@ only rows with `available_from_utc <= forecast_issue_time` (daily/weekly tables)
 | co2_eua_daily | available_from_utc | UTC timestamp | derived | date 12:00 Europe/Zurich in UTC | – |
 | co2_eua_daily | source | text | – | `EEX_primary_auction` | – |
 | reservoir_weekly | measure_date | – | BFE ogd17 `Datum` | Monday date = level on the preceding **Sunday 24:00** | – |
-| reservoir_weekly | reservoir_gwh_ch | GWh | BFE | stored energy, all of Switzerland | known from measure_date + 2 days 18:00 Zurich (Wednesday; assumption) |
+| reservoir_weekly | reservoir_gwh_ch | GWh | BFE | stored energy, all of Switzerland | known from measure_date + 3 days 23:59 Zurich (Thursday end of day) |
 | reservoir_weekly | reservoir_max_gwh_ch | GWh | BFE | maximum storage capacity (changes over time) | same |
 | reservoir_weekly | reservoir_fill_pct | % | derived | gwh_ch ÷ max_gwh_ch × 100 | same |
 | reservoir_weekly | reservoir_gwh_{wallis,graubuenden,tessin,rest_ch} | GWh | BFE | regional stored energy | same |
@@ -29,7 +29,7 @@ only rows with `available_from_utc <= forecast_issue_time` (daily/weekly tables)
 | reservoir_weekly | iso_week | week no. | derived | ISO week of measure_date | – |
 | reservoir_weekly | reservoir_median_pct_same_week | % | derived | median fill % of the same ISO week in years strictly before the row's ISO year (from 2000) | same |
 | reservoir_weekly | reservoir_vs_median_pct | percentage points | derived | fill_pct − median | same |
-| reservoir_weekly | available_from_utc | UTC timestamp | derived | measure_date + 2 d, 18:00 Zurich in UTC | – |
+| reservoir_weekly | available_from_utc | UTC timestamp | derived | measure_date + 3 d, 23:59 Zurich in UTC | – |
 | eurchf_daily | date | – | – | ECB business day | – |
 | eurchf_daily | chf_per_eur | CHF per EUR | ECB `EXR/D.CHF.EUR.SP00.A` | reference rate (14:15 CET concertation) | published ~16:00 CET same day |
 | eurchf_daily | available_from_utc | UTC timestamp | derived | date 16:00 Europe/Zurich in UTC | – |

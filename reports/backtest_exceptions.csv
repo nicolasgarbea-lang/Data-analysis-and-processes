@@ -1,0 +1,27 @@
+split,delivery_date,check,excess_chf,demand_part_chf,battery_part_chf,reason
+test,2026-10-02,ml_battery > baseline,1813.332781817764,-694.4910660560708,2507.823847873835,"limit bid not (fully) cleared: less energy stored, planned discharge partly not delivered"
+test,2026-10-06,ml_battery > baseline,1203.6237890885677,329.9820212572813,873.6417678312864,"limit bid not (fully) cleared: less energy stored, planned discharge partly not delivered"
+test,2026-10-15,ml_battery > baseline,1107.1630109662656,-1877.130138619803,2984.2931495860685,"limit bid not (fully) cleared: less energy stored, planned discharge partly not delivered"
+test,2026-10-16,perfect_foresight > ml_battery,298.4129331319127,,,"charge-level carry-over: ml_battery took more energy out of the battery than it put in (energy bought on an earlier day), perfect foresight did not"
+test,2026-10-17,ml_battery > baseline,5364.440981280059,4256.543064493686,1107.8979167863727,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+test,2026-10-18,ml_battery > baseline,1599.2747874550987,2353.7874683791306,-754.5126809240319,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+test,2026-10-20,ml_battery > baseline,2847.585415326059,2125.4451311994344,722.1402841266245,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+test,2026-10-24,ml_battery > baseline,9758.831196960993,6309.835171919083,3448.99602504191,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+test,2026-10-25,ml_battery > baseline,8266.195207873825,10414.675450446317,-2148.480242572492,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+test,2026-10-26,ml_battery > baseline,12251.349057735177,11491.567511964124,759.7815457710531,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+test,2026-10-27,ml_battery > baseline,3975.3324981951155,3223.7190685656387,751.6134296294767,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+test,2026-10-28,ml_battery > baseline,18498.992410471197,17574.731519653462,924.2608908177353,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+test,2026-10-29,ml_battery > baseline,106.78983088582754,4924.158931608312,-4817.369100722484,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+test,2026-10-30,ml_battery > baseline,20386.998854261125,17771.28645508713,2615.7123991739936,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+test,2026-10-31,ml_battery > baseline,4416.134427069919,6742.091656984761,-2325.957229914842,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-01,ml_battery > baseline,7205.80019535427,7927.83295445051,-722.0327590962406,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-02,ml_battery > baseline,4242.9921149993315,5471.763482636306,-1228.771367636975,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-03,ml_battery > baseline,487.40769641508814,1460.283063670504,-972.8753672554158,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-10,ml_battery > baseline,11730.94260447193,12388.447396979434,-657.504792507505,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-11,ml_battery > baseline,7896.45281199459,6746.400062140077,1150.0527498545125,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-13,ml_battery > baseline,236.04961455822922,2974.8735046164365,-2738.8238900582073,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-17,ml_battery > baseline,13176.336680352688,11802.10112810973,1374.235552242957,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-18,ml_battery > baseline,6587.005106310593,6921.7625367962755,-334.75743048568256,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-21,ml_battery > baseline,7.682051780633628,3589.6056872266345,-3581.923635446001,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-22,ml_battery > baseline,3454.4736546040513,2997.3521480998024,457.1215065042488,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
+val,2026-09-25,ml_battery > baseline,216.46187236555852,1704.740118542686,-1488.2782461771276,demand forecast: the ML demand forecast was further off than the naive one (more imbalance)
