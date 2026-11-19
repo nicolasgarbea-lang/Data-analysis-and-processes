@@ -27,6 +27,7 @@ STRATEGY_NAMES = {
     "ml_battery": "Our product: ML forecasts + battery",
     "ml_battery_block_default": "ML + battery, simple 4-hour block plan",
     "perfect_foresight_battery": "Perfect foresight, 4-hour block rules",
+    "perfect_foresight_hourly_daily_battery": "Perfect foresight, hourly, back to start level every day",
     "perfect_foresight_hourly_battery": "Perfect foresight, hourly (best possible)",
     "perfect_demand_no_battery": "Perfect demand forecast, no battery",
 }
@@ -37,6 +38,7 @@ STRATEGY_COLORS = {
     "ml_battery": "#0ca30c",
     "ml_battery_block_default": "#1baf7a",
     "perfect_foresight_battery": "#9085e9",
+    "perfect_foresight_hourly_daily_battery": "#b07fd6",
     "perfect_foresight_hourly_battery": "#6250d6",
     "perfect_demand_no_battery": "#e87ba4",
 }

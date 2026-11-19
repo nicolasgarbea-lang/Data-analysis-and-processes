@@ -39,9 +39,12 @@ def test_app_starts_and_has_five_tabs(app):
     # KPI tiles and the one-line verdict of the Tomorrow tab
     metric_labels = [m.label for m in app.metric]
     for lbl in ["Energy to buy", "Expected cost", "Expected battery saving", "Realised cost after settlement",
-                "Imbalance cost"]:
+                "Imbalance penalty"]:
         assert lbl in metric_labels
     assert any(m.value.startswith("####") and "Expected saving" in m.value for m in app.markdown)
+    # the Month backtest tab puts the imbalance-price caveat next to the saving (when the files exist)
+    if (ROOT / "reports" / "backtest_decision_sensitivity.csv").exists():
+        assert any("depends on the assumed imbalance penalty" in w.value for w in app.warning)
     # every tab renders something
     for tab in app.tabs:
         assert len(tab.children) > 0

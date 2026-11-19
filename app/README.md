@@ -42,12 +42,33 @@ day takes well under a second.
 | `data/processed/hourly_actuals.parquet` | hourly actual demand and price, settlement, daily profiles |
 | `reports/predictions_demand.parquet`, `reports/predictions_price.parquet` | ML forecasts and 10–90 % bands |
 | `reports/decision_tuning.csv` | the tuned decision rules (`tuned_decision()`) |
-| `reports/backtest.csv`, `backtest_summary.csv`, `backtest_decomposition.csv`, `backtest_battery_sensitivity.csv`, `backtest_price_error_sensitivity.csv`, `backtest_decision_sensitivity.csv` | Month backtest tab; charge level carried into each day |
+| `reports/backtest.csv`, `backtest_summary.csv`, `backtest_decomposition.csv`, `backtest_battery_sensitivity.csv`, `backtest_price_error_sensitivity.csv`, `backtest_decision_sensitivity.csv` | Month backtest tab; charge level carried into each day; the imbalance caveat next to the saving (half-penalty number from `backtest_decision_sensitivity.csv`) |
+| `reports/backtest_ci_sensitivity.csv` (optional) | Month backtest tab: the wider 7-day block-bootstrap interval; skipped if the file is missing |
+| `reports/model_notes_demand.md`, `reports/model_notes_price.md` | Drivers tab: full model notes in an expander |
 | `reports/metrics_{demand,price}.csv`, `reports/importance_{demand,price}.csv`, `reports/importance_groups_{demand,price}.csv` | Drivers tab |
 | `docs/architecture_tso_dso.svg`, `docs/data_sources.md`, `docs/assumptions_*.md`, `docs/review_log.md` | Data and method tab |
 
 `models/*.joblib` are not loaded by the app: the forecasts come from the prediction files written by
 the model scripts (same numbers, much faster start-up).
+
+## What the Month backtest tab says about the money
+
+Next to the saving the tab shows, in plain words, that the result is a simulation of one month with assumed
+imbalance prices and a fictional battery, that most of the saving depends on the assumed imbalance penalty (with
+the half-penalty number), the wider interval when runs of similar days are kept together, and where the gap
+between block rules and the best plan comes from. "Imbalance penalty" in the tiles and tables is only the assumed
+extra charge p ± 0.2·|p| on the deviation; "imbalance settlement" is everything paid or received for deviations.
+The toggle on the Tomorrow tab changes only the two forecast charts; realised cost and the settlement table always
+use actual values.
+
+The battery slider "Max full cycles per day" uses the project brief's definition: one cycle = the usable capacity
+delivered to the grid, about 5 % more than one physical full cycle of stored energy.
+
+## Before you publish
+
+This app has not been deployed. The gas price it plots comes from Yahoo Finance (`TTF=F`, personal/educational
+use only) and CO₂ from EEX (research use), and series derived from both are in the repository. Before a public
+deployment the team must decide on these licences; the fix is to replace them with an HSG LSEG/Bloomberg export.
 
 ## While the price model is missing
 

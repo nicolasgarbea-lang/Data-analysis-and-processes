@@ -28,8 +28,8 @@ P = ROOT / "data" / "processed"
 
 STRAT_ORDER = [
     "baseline_naive_no_battery", "ml_no_battery", "naive_battery", "ml_battery",
-    "ml_battery_block_default", "perfect_foresight_battery", "perfect_foresight_hourly_battery",
-    "perfect_demand_no_battery",
+    "ml_battery_block_default", "perfect_foresight_battery", "perfect_foresight_hourly_daily_battery",
+    "perfect_foresight_hourly_battery", "perfect_demand_no_battery",
 ]
 MODEL_NAMES = {"naive": "Naive (same block 7 days earlier)", "linear": "Linear (ridge)",
                "rf": "Random forest", "gbm": "Gradient boosting (LightGBM)", "best": "Best (final model)"}
@@ -47,6 +47,10 @@ def f1(x: float) -> str:
 
 def f2(x: float) -> str:
     return "–" if pd.isna(x) else f"{x:.2f}"
+
+
+def pval(x: float) -> str:
+    return "–" if pd.isna(x) else ("<0.001" if x < 0.001 else f"{x:.3f}")
 
 
 def pct(x: float, d: int = 0) -> str:
@@ -121,7 +125,7 @@ def t_dm() -> str:
                                                        "rolling": "Oct 2025–Aug 2026"}[r.split],
                          "comparison": f"{r.model_a} vs {r.model_b}",
                          "mean daily MAE difference": f"{r.mean_diff:.2f}",
-                         "DM statistic": f"{r.dm_stat:.2f}", "p-value": f"{r.p_value:.3f}",
+                         "DM statistic": f"{r.dm_stat:.2f}", "p-value": pval(r.p_value),
                          "days": int(r.n_days)})
     return md(pd.DataFrame(rows))
 
@@ -201,6 +205,41 @@ def t_decomposition() -> str:
                      "% of ceiling": pct(r.pct_ceiling_captured_total),
                      "% of ceiling battery value": pct(r.pct_ceiling_battery_value_captured),
                      "cost of 4-hour block rule": chf(r.block_rule_cost_chf)})
+    return md(pd.DataFrame(rows))
+
+
+PERIOD_NAMES = {"test": "Oct 2026 (test, 31 days)", "val": "Sept 2026 (validation, 30 days)",
+                "rolling": "Oct 2025–Aug 2026 (rolling, 335 days)"}
+
+
+def t_block_rule_split() -> str:
+    """M3: the gap between the block-rule oracle (5) and the ceiling (6), split into finer
+    dispatch (5 -> 5b) and inter-day flexibility (5b -> 6)."""
+    d = decomposition()
+    rows = []
+    for split in ["test", "val", "rolling"]:
+        r = d.loc[split]
+        rows.append({"period": PERIOD_NAMES[split],
+                     "battery value, 4-hour blocks, daily reset (5)": chf(r.block_perfect_battery_value_chf),
+                     "battery value, hourly, daily reset (5b)": chf(r.hourly_daily_battery_value_chf),
+                     "battery value, hourly, whole period (6)": chf(r.ceiling_battery_value_chf),
+                     "gap 5 → 6 (CHF)": chf(r.block_rule_cost_chf),
+                     "of which finer dispatch (5 → 5b)": chf(r.finer_dispatch_part_chf),
+                     "of which inter-day flexibility (5b → 6)": chf(r.interday_flexibility_part_chf)})
+    return md(pd.DataFrame(rows))
+
+
+def t_ci_sensitivity() -> str:
+    """M5: interval of the product's saving with independent days vs a 7-day block bootstrap."""
+    c = pd.read_csv(R / "backtest_ci_sensitivity.csv").set_index("split")
+    rows = []
+    for split in ["test", "val", "rolling"]:
+        r = c.loc[split]
+        rows.append({"period": PERIOD_NAMES[split],
+                     "product saving vs 1 (CHF)": chf(r.saving_vs_baseline_adj_chf),
+                     "lag-1 autocorrelation of daily saving": f2(r.lag1_autocorr_daily_saving),
+                     "95 % interval, independent days": f"{chf(r.ci_independent_days_low_chf)} to {chf(r.ci_independent_days_high_chf)}",
+                     f"95 % interval, {int(r.block_length_days)}-day blocks": f"{chf(r.ci_block_low_chf)} to {chf(r.ci_block_high_chf)}"})
     return md(pd.DataFrame(rows))
 
 
@@ -366,6 +405,10 @@ def keynums() -> str:
     ds = pd.read_csv(R / "backtest_decision_sensitivity.csv")
     _, days, cost, year, year_days, year_cost = _year()
     ml = s.loc[("test", "ml_battery")]
+    ci = pd.read_csv(R / "backtest_ci_sensitivity.csv").set_index("split")
+    hh = pd.read_parquet(R / "backtest_hourly_test.parquet")
+    hb = hh[(hh.strategy == "ml_battery") & (hh.charge_bid_mwh > 1e-9)]
+    n_bid, n_clr = len(hb), int((hb.charge_cleared_mwh > 1e-9).sum())
     lines = [
         f"demand Oct MAE best {mae(dm,'test','best'):.2f} MW, MAPE {mae(dm,'test','best','mape_or_smape'):.2f} %, naive {mae(dm,'test','naive'):.2f} MW, gbm {mae(dm,'test','gbm'):.2f}",
         f"demand Sept MAE best {mae(dm,'val','best'):.2f}; rolling best {mae(dm,'rolling','best'):.2f}, naive {mae(dm,'rolling','naive'):.2f}",
@@ -377,6 +420,10 @@ def keynums() -> str:
         f"Oct battery share of product saving {100*d.loc['test','battery_part_chf']/d.loc['test','total_saving_chf']:.0f} %",
         f"Oct ceiling saving CHF {chf(d.loc['test','ceiling_total_saving_chf'])}; % captured {d.loc['test','pct_ceiling_captured_total']:.0f} %; battery ceiling CHF {chf(d.loc['test','ceiling_battery_value_chf'])}, captured {d.loc['test','pct_ceiling_battery_value_captured']:.0f} %",
         f"Oct block-rule cost CHF {chf(d.loc['test','block_rule_cost_chf'])}; block oracle battery value CHF {chf(d.loc['test','block_perfect_battery_value_chf'])}",
+        f"Oct block-rule split: 5b battery value CHF {chf(d.loc['test','hourly_daily_battery_value_chf'])}; finer dispatch CHF {chf(d.loc['test','finer_dispatch_part_chf'])}, inter-day flexibility CHF {chf(d.loc['test','interday_flexibility_part_chf'])}",
+        f"Oct CI 7-day blocks {chf(ci.loc['test','ci_block_low_chf'])} to {chf(ci.loc['test','ci_block_high_chf'])}; lag-1 autocorr {ci.loc['test','lag1_autocorr_daily_saving']:.2f}",
+        f"Oct charge bids product: {100*ml.share_charge_cleared:.2f} % of offered MWh cleared; {n_clr} of {n_bid} hourly bids ({100*n_clr/n_bid:.2f} %)",
+        f"Oct imbalance product: penalty CHF {chf(ml.imbalance_penalty_chf)}, full imbalance settlement CHF {chf(ml.imbalance_cost_chf)}",
         f"Oct forecast-error cost naive CHF {chf(d.loc['test','forecast_error_cost_naive_chf'])}, ML CHF {chf(d.loc['test','forecast_error_cost_ml_chf'])}",
         f"Oct CI product saving {chf(ml.saving_adj_ci_low_chf)} to {chf(ml.saving_adj_ci_high_chf)}; days cheaper than baseline {int(ml.days_cheaper_than_baseline)} of {int(ml.days)}",
         f"Oct charge cleared product {100*ml.share_charge_cleared:.0f} %, cycles {ml.cycles:.1f}",
@@ -413,6 +460,8 @@ TABLES = {
     "importance_price": lambda: t_importance("price"),
     "strategies_test": lambda: t_strategies("test"),
     "decomposition": t_decomposition,
+    "block_rule_split": t_block_rule_split,
+    "ci_sensitivity": t_ci_sensitivity,
     "year": t_year,
     "monthly": t_monthly,
     "battery_size": t_battery_size,

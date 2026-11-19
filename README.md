@@ -14,6 +14,13 @@ before the Swiss day-ahead auction closes, the project
 Test month October 2026: demand MAE 3.34 MW, price MAE 10.99 EUR/MWh, CHF 226,499 saved against a naive rule without
 battery (CHF 181,033 from the better demand forecast, CHF 45,466 from the battery).
 
+> **Caveat next to the headline.** This is a simulation of **one test month** with **assumed imbalance prices**
+> (p ± 0.2·|p|) and a **fictional battery**. About 80 % of the saving is avoided assumed imbalance penalty: with half
+> the penalty (±10 %) it would be CHF 135,998 (90,517 demand + 45,481 battery). Swissgrid's real settlement is
+> quarter-hourly with a single price since 2026, so these numbers do not prove that the demand forecast is worth more
+> than the battery under real settlement. The 95 % interval is CHF 129,685 to 354,460 when runs of 7 days are kept
+> together (158,868 to 306,077 if the days were independent).
+
 - One-pager: [`day_ahead_planning.md`](day_ahead_planning.md)
 - Full report: [`reports/report.md`](reports/report.md) · slide outline: [`reports/slide_outline.md`](reports/slide_outline.md)
 
@@ -71,7 +78,8 @@ All commands from the project folder.
 .venv/bin/python -m src.pipeline --all --skip-download  # same, from the files already in data/raw/ (no internet)
 ```
 
-Single steps (combine as needed): `--data`, `--features`, `--models`, `--backtest`, `--metrics`, e.g.
+`--all` uses the **frozen** model settings in `models/*.json` (it does not redo the searches). Single steps (combine
+as needed): `--data`, `--features`, `--models`, `--backtest`, `--metrics`, e.g.
 
 ```bash
 .venv/bin/python -m src.pipeline --features --models
@@ -80,7 +88,24 @@ Single steps (combine as needed): `--data`, `--features`, `--models`, `--backtes
 .venv/bin/python -m src.backtest.run_backtest --require-ml
 ```
 
-Tests (154 tests):
+Not part of `--all` (separate commands):
+
+```bash
+.venv/bin/python -m src.models.demand --experiments --tune   # redo the variant comparison and hyper-parameter search (slow)
+.venv/bin/python -m src.models.price --experiments --tune    # same for the price model
+.venv/bin/python reports/make_report_tables.py --fill reports/report.md   # rewrite the report tables from the result files
+.venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb   # EDA notebook
+```
+
+**About `python -I`.** The project brief asked to run Python with `-I` (isolated mode). With `-I`, `python -m src...`
+cannot find the project package (ModuleNotFoundError), so the modules are run **without** `-I`, always from the
+project folder.
+
+**Leakage test scope.** `tests/test_no_leakage.py` cuts and "poisons" the **processed** input tables after the
+forecast time and rebuilds the features; it does not replay from the raw downloads. The raw-to-processed step is
+covered by the loader tests and `reports/data_checks.md`.
+
+Tests (159 tests):
 
 ```bash
 .venv/bin/python -m pytest
@@ -108,6 +133,15 @@ Report tables (check that every table in the report matches the result files):
 | Features, backtest | not timed in the result files; the backtest prints its own duration |
 | App start | a few seconds; planning one day takes well under a second |
 
+## Before you publish
+
+The repository has **not** been pushed or deployed. Before any public push or app deployment the team must decide on
+two data licences: Yahoo Finance data (`TTF=F`, gas) is for personal/educational use, and EEX auction data is for
+research use. Processed series and feature columns derived from them are tracked in git
+(`data/processed/gas_ttf_daily.parquet`, `co2_eua_daily.parquet`, `features.parquet`), and the app plots the gas
+series. The clean fix is to replace the gas (and, if needed, CO₂) series with an HSG LSEG/Bloomberg export and to
+rebuild; until then keep the repository private.
+
 ## Deploy the app on Streamlit Community Cloud
 
 Push the repo to GitHub (without `data/raw/`), then on share.streamlit.io create a new app with main file
@@ -123,7 +157,7 @@ and the list of files the app needs: [`app/README.md`](app/README.md).
 | Model notes (choices, experiments, drivers) | `reports/model_notes_demand.md`, `reports/model_notes_price.md` |
 | Forecasts | `reports/predictions_demand.parquet`, `reports/predictions_price.parquet` |
 | Backtest per day and strategy | `reports/backtest.csv` |
-| Backtest summary, decomposition, sensitivities | `reports/backtest_summary.csv`, `backtest_decomposition.csv`, `backtest_*sensitivity*.csv`, `reports/backtest_notes.md` |
+| Backtest summary, decomposition, sensitivities | `reports/backtest_summary.csv`, `backtest_decomposition.csv`, `backtest_*sensitivity*.csv` (incl. `backtest_ci_sensitivity.csv`, the block-bootstrap interval), `reports/backtest_notes.md` |
 | Data checks | `reports/data_checks.md` |
 | Figures | `reports/figures/` |
 | Assumptions, data dictionary, sources | `docs/assumptions.md`, `docs/data_dictionary.md`, `docs/data_sources.md` |

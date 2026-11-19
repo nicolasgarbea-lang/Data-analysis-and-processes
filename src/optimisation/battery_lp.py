@@ -116,6 +116,14 @@ def solve_battery_plan(
     soc_end_mwh : required charge level at the end of the day (default = start level, so
         every day stands on its own).
 
+    Cycle definition (from the project brief): the energy DELIVERED to the grid by
+    discharging over one day is capped at ``max_cycles_per_day x (soc_max - soc_min)``,
+    i.e. one cycle = 32 MWh delivered per day for the default 40 MWh battery. Because of
+    the discharge losses, emptying the full usable stored energy (32 MWh) delivers only
+    32 x eta_discharge = 30.36 MWh, so this cap allows about 5 % more than one physical
+    full cycle. We keep the brief's definition; a physical cap would lower the October
+    battery saving by about CHF 1,000 (see docs/assumptions_backtest.md).
+
     Returns
     -------
     DataFrame with one row per period and the columns ``hours, demand_mwh, price_eur_mwh,
@@ -204,7 +212,8 @@ def solve_battery_plan(
     A[0, SOC.start + n - 1] = 1.0
     add(A, soc_end, soc_end)
 
-    # at most N full cycles per day
+    # at most N cycles per day; one cycle = (soc_max - soc_min) MWh DELIVERED to the grid (the
+    # brief's definition, about 5 % more than one physical full cycle of stored energy)
     A = np.zeros((1, nvar))
     A[0, DIS] = 1.0
     add(A, -np.inf, battery.max_cycles_per_day * battery.usable_mwh)

@@ -6,7 +6,8 @@ marked *(updated)*.
 
 ## 1. Business set-up
 - The DSO is fictional (*Limmat Energie AG*); its demand is the real ewz load of the city of Zurich. – Real open data, no confidential company data needed.
-- The battery is fictional: 20 MW / 40 MWh, usable 10–90 %, 90 % round trip (√0.9 each way), ≤ 1 full cycle per day, start and end level 50 %, wear cost 5 EUR per MWh discharged (`config.yaml`). – Typical values for a 2-hour grid battery.
+- The battery is fictional: 20 MW / 40 MWh, usable 10–90 %, 90 % round trip (√0.9 each way), ≤ 1 cycle per day, start and end level 50 %, wear cost 5 EUR per MWh discharged (`config.yaml`). – Typical values for a 2-hour grid battery.
+- One cycle = 32 MWh (soc_max − soc_min) **delivered to the grid** per day, the project brief's definition *(stated after the final review)*. – A full swing of the usable stored energy delivers only 30.36 MWh after discharge losses, so this allows about 5 % more than one physical full cycle (October: 30.8 cycles by this definition = 32.46 full swings); a physical cap would lower the October battery saving by about CHF 1,000.
 - The battery is not a demand feature; "usage" in the team's diagram means past demand. – A battery does not change how much the city consumes.
 - The DSO does not sell energy back (`allow_sell: false`). – A DSO buys for its customers; a sensitivity run shows selling changes nothing for a 20 MW battery.
 - The battery is a price taker: its bids do not move the auction price; charge bids clear fully or not at all. – 20 MW is small for the Swiss market; no order-book data.
@@ -48,8 +49,9 @@ marked *(updated)*.
 - MeteoSwiss hourly stamp = end of the hour → shifted −1 h; Open-Meteo stamps also shifted −1 h. – Checked against the solar noon and the station radiation.
 - `_previous_dayN` = latest run initialised at or before valid time − N × 24 h; leakage-safe lead = day1 only if that run was published by D 10:00, else day2. – Verified with the Open-Meteo single-runs API; publication delays assumed ICON 4 h, ECMWF 8 h, JMA 6 h.
 - Archived previous-runs values equal what was available in real time. – Cannot be verified retroactively.
-- Main forecast = ICON-seamless (real archive from 2024-01-19); JMA kept as the only real forecast back to 2018. – Lowest error (temperature MAE 1.10 °C before correction).
-- Temperature bias correction per calendar month × local hour, fitted only before 2026-09-01. – Out of sample for September and October; small look-ahead for the rolling 2025–26 run (documented).
+- Main forecast = ICON-seamless (full archive from 2024-01-19); JMA kept as the only real (coarser) forecast back to 2018. The forecast used is the run available by 10:00 on D under the assumed release delays (for most hours the run from the day before). – Lowest error (temperature MAE 1.10 °C before correction).
+- Temperature bias correction per calendar month × local hour, fitted only before 2026-09-01. – The coefficients are out of sample for September and October; small look-ahead for the rolling 2025–26 run (documented).
+- *(updated after the final review)* The correction **method** (month × hour offsets vs one linear fit) was chosen by comparing errors on September **and** October 2026 weather (`docs/assumptions_weather.md`). On September alone the single linear fit wins by a hair (0.8929 vs 0.8942 °C); with October the month × hour method wins (0.9288 vs 0.9407 °C). – Not retrained: the methods differ by about 0.001–0.01 °C and the choice never saw October demand or prices. This is the only pre-processing choice that saw October data.
 - Before 21 Jan 2024 the hybrid weather input is OBSERVED weather (training rows only); `weather_is_forecast` tells the model which regime a row is in. – No forecast archive exists; validation and test use real forecasts only.
 - Heating degree base 15 °C, cooling degree base 22 °C. – Common Swiss/European conventions.
 - European weather: 9 representative points, unweighted regional means, wind power proxy min(v, 25)³. – Simple and transparent; wind power ∝ v³ below rated speed.
@@ -81,9 +83,12 @@ marked *(updated)*.
 - Charge bids are limit bids at expected discharge price × 0.9 − wear cost. – Only buy energy to store if it will pay off.
 - Decision rules tuned once on 2025-10-01 → 2026-08-31 plus 1–29 Sept 2026; a candidate replaces the default only if it wins with a 95 % paired-bootstrap interval above zero. – October never used; 29 Sept is the last day settled by 30 Sept 10:00.
 - Settlement uses actual hourly prices and demand; a missing or non-finite value stops the run. – Never settle with forecasts or with silent zeros.
-- Imbalance: shortage costs p + 0.2·|p|, surplus earns p − 0.2·|p| (p = actual DA price). – Assumption (not Swissgrid prices); |p| keeps it a penalty at negative prices.
+- Imbalance: shortage costs p + 0.2·|p|, surplus earns p − 0.2·|p| (p = actual DA price). – Assumption (not Swissgrid prices); |p| keeps it a penalty at negative prices. It explains about 80 % of the October saving (CHF 181,033 of 226,499; with ±10 %: CHF 135,998). Swissgrid settles quarter-hourly with a single price since 2026, so the ranking demand forecast vs battery is not proven for real settlement.
 - CHF = hourly EUR × ECB EUR/CHF of the delivery date (last earlier rate on non-publication days). – Official daily rate.
 - Ceiling = one hourly perfect-foresight plan over the whole period with matched start and end level. – A true lower bound on cost.
+- Strategy 5b = hourly perfect foresight planned day by day, back to the start level every evening *(added after the final review)*. – Splits the gap block oracle (5) → ceiling (6) into finer dispatch (5 → 5b) and inter-day flexibility (5b → 6).
 - Inventory-adjusted cost = raw cost − (end − start stock) × discharge efficiency × period mean actual price × mean EUR/CHF. – Strategies end with different stored energy.
 - The actual end-of-day battery level is carried into the next day. – Known at forecast time.
 - Sensitivities (battery size, price noise, imbalance factors, limit factor, wear cost, selling) are run on October for information only. – Nothing is chosen from the test month.
+- The day bootstrap treats days as independent; a 7-day circular block bootstrap is reported next to it (`reports/backtest_ci_sensitivity.csv`). – Daily savings are correlated (October lag-1 autocorrelation 0.57).
+- `--require-ml` requires six finite ML predictions per target for every day of every period; otherwise the run stops naming the day *(added after the final review)*. – A missing day must never shorten an evaluation period silently.

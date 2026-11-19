@@ -152,14 +152,14 @@ Single LightGBM unless stated; `cv_mae` = mean over the 5 folds, `cv_mae_last2` 
 |---|---|---|---|---|---|
 | normal day | 1548 | 13.68 | 5.18 | 4.55 | −0.41 |
 | school holiday | 492 | 12.12 | 4.93 | 4.00 | +0.69 |
-| public holiday | 36 | 52.54 | 5.12 | 4.49 | +2.11 |
-| day T−2 was a holiday (misleading reference) | 48 | 22.21 | 6.01 | 6.60 | −3.69 |
+| public holiday (the six outside 24 Dec–2 Jan) | 36 | 52.54 | 5.12 | 4.49 | +2.11 |
+| delivery two days after a holiday (T−2 was a holiday, misleading reference) | 48 | 22.21 | 6.01 | 6.60 | −3.69 |
 | Christmas period | 60 | 27.96 | 6.13 | 6.59 | −1.68 |
 | bridge day | 6 | 8.47 | 5.50 | 5.34 | −0.06 |
 | half holiday (e.g. Sechseläuten, Knabenschiessen) | 6 | 36.67 | 10.45 | 7.72 | +7.59 |
 
-The best model handles holidays themselves well, but on the days *after* a holiday (when the reference day was a
-holiday) and around Christmas it is slightly worse than the level LightGBM and forecasts too low. Blending in
+The best model handles holidays themselves well, but on delivery days two days *after* a holiday (when the
+reference day T−2 was a holiday) and around Christmas it is slightly worse than the level LightGBM and forecasts too low. Blending in
 the level model on such days is the obvious next improvement (not done, to keep the October test untouched).
 
 
@@ -232,15 +232,17 @@ Permutation importance on Sept + Oct 2026 (MAE increase in MW when a column, or 
 * **EVs:** the EV and charging columns add nothing measurable (group importance ≈ 0.00 MW; without them the
   single-LightGBM MAE was even slightly lower, 3.29 → 3.16 in Sept, 3.63 → 3.53 in Oct). They grow smoothly over
   years, and that slow trend is already in the recent demand lags.
-* **Weather:** the most important group after past demand and the calendar (shuffling all weather columns adds
-  7.0 MW of MAE; without weather inputs the single LightGBM goes from 3.29 to 7.41 MW in September). Solar
+* **Weather:** the fourth most important input group, after past demand, weekday/weekend and holidays (shuffling
+  all weather columns adds 7.0 MW of MAE; without weather inputs the single LightGBM goes from 3.29 to 7.41 MW in September). Solar
   radiation matters most, temperature less in this mild season.
-* **Solar:** the lagged Swiss solar production (Energy-Charts) adds almost nothing (0.03 MW); the solar effect on
+* **Solar:** the lagged Swiss solar production (Energy-Charts) adds almost nothing (0.013 MW); the solar effect on
   city load is captured through the radiation forecast for the delivery day.
 * **Holidays:** essential - the holiday/school-holiday group adds 9.5 MW of MAE when shuffled. On public holidays
-  the model is ten times better than the naive forecast (4.5 vs 52.5 MW); the weak spot is the day after a holiday.
-* **Events:** big events and FC Zürich / GC home games have no measurable effect on 4-hour city load (importance
-  ≤ 0; removing them changes MAE by less than the seed noise).
+  outside 24 Dec–2 Jan (six days) the model's error is 4.5 MW against 52.5 MW for the naive forecast (all ten public
+  holidays: 5.6 vs 48.3 MW); the weak spot is delivery two days after a holiday (6.6 MW).
+* **Events:** big events and FC Zürich / GC home games add little incremental predictive value in this model
+  (importance ≤ 0; without them the single-seed October MAE was 3.47 instead of 3.63 MW, a difference within the
+  seed noise). This is not a causal statement about events and load.
 * **Data delay:** if demand of D−1 were not yet available (only D−2), the MAE would rise from 3.29 to 3.93 MW in
   September and from 3.63 to 4.70 MW in October (single LightGBM).
 

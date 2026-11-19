@@ -22,7 +22,7 @@ One line each, with the reason. Code: `src/decision/bids.py`, `src/backtest/run_
 - Charge limit = expected discharge price × `charge_limit_factor` − wear cost (expected discharge price = discharge-weighted forecast price of the planned discharge periods after the charge period, else of all discharge periods of the day); pure refill (no discharge planned) → limit = highest forecast price of the day; `use_limit: false` → price-independent charge bids.
 - `limit_rule: quantile` additionally caps the limit at the q90 price forecast of the charge period (only when `pred_q90` exists in the price predictions).
 - `protect: at_risk_bid`: planned discharge not covered by the energy surely available (start stock above minimum + price-independent charges) is added to the price-independent demand bid; if not needed it is sold back as surplus.
-- Oracles (5, 6) bid charge energy without a limit, use physical wear only, no margin, no protection.
+- Oracles (5, 5b, 6) bid charge energy without a limit, use physical wear only, no margin, no protection.
 
 ## Settlement
 - Settlement uses ACTUAL hourly day-ahead prices and ACTUAL hourly Zurich demand (`data/processed/hourly_actuals.parquet`), never forecasts.
@@ -34,12 +34,14 @@ One line each, with the reason. Code: `src/decision/bids.py`, `src/backtest/run_
 - The actual end-of-day charge level is carried into the next day (known at forecast time); drift ≤ 1e-6 MWh is clipped, anything larger is an error.
 
 ## Strategies, ceiling and inventory
-- Strategies: 1 baseline (naive demand, no battery), 2 ML demand no battery, 3 naive forecasts + battery (tuned rules), 4 product = ML + battery with the tuned rules, 4b ML + battery with the plain block plan and config defaults, 5 perfect foresight with the same 4-hour block rules, 6 ceiling, 7 perfect demand without battery.
+- Strategies: 1 baseline (naive demand, no battery), 2 ML demand no battery, 3 naive forecasts + battery (tuned rules), 4 product = ML + battery with the tuned rules, 4b ML + battery with the plain block plan and config defaults, 5 perfect foresight with the same 4-hour block rules, 5b perfect foresight with an hourly plan per day and the same end-of-day target as 5 (added after the final review), 6 ceiling, 7 perfect demand without battery.
+- Decomposition (`reports/backtest_decomposition.csv`): `block_rule_cost_chf` = C5 − C6 = `finer_dispatch_part_chf` (C5 − C5b) + `interday_flexibility_part_chf` (C5b − C6); October: CHF 31,670 = 27,002 + 4,668.
+- Cycle definition (from the brief): Σ discharge delivered to the grid ≤ `max_cycles_per_day` × (soc_max − soc_min) = 32 MWh per day. A full swing of the usable stored energy delivers only 32 × √0.9 = 30.36 MWh, so this allows about 5 % more than one physical full cycle (on 27 of 31 October days the product uses this margin; physical cap ≈ −CHF 1,000 of October battery saving). Kept as in the brief.
 - Ceiling (6) = ONE hourly perfect-foresight MILP over all hours of the period: power, charge limits, ≤ 1 cycle per delivery day, discharge ≤ hourly demand, end-of-period charge level = start level (matched inventory); simultaneous charge/discharge forbidden by a binary in negative-price hours (elsewhere it never pays and is netted out). It is a true lower bound; single-day comparisons with it are not meaningful (it shifts energy between days).
 - `plan_day` for strategy 6 on a single day (app) solves that day alone with end level = start level.
 - Every evaluation period starts at 50 %. Inventory adjustment (reported next to the raw numbers): adjusted cost = raw cost − (end − start charge level) × discharge efficiency × the period's mean actual DA price × mean EUR/CHF. Reason: a strategy that ends emptier used energy it did not pay for in the period.
 - "% of ceiling" and battery values use the adjusted costs.
-- Naive = same block 7 days earlier (`*_lag_7d_same_block` or `pred_naive`); ML = `pred_best` from `reports/predictions_<target>.parquet`, picked up automatically; dates not in a file have no ML forecast (error, no silent fallback); `--require-ml` fails if a file is missing.
+- Naive = same block 7 days earlier (`*_lag_7d_same_block` or `pred_naive`); ML = `pred_best` from `reports/predictions_<target>.parquet`, picked up automatically; dates not in a file have no ML forecast (error, no silent fallback); `--require-ml` fails if a file is missing, and (after the final review) also if any calendar day of the tuning, validation, test or rolling period lacks input data or six finite predictions per target (`check_ml_coverage`; the error names the day and the target).
 - STAND-IN (only while a prediction file does not exist, labelled "standin" in every output and in the notes): demand = 4-week same-weekday block mean, price = same block on day D.
 
 ## Tuning and sensitivities
@@ -50,4 +52,5 @@ One line each, with the reason. Code: `src/decision/bids.py`, `src/backtest/run_
 - Strategy 3 uses the same tuned rules as the product (isolates forecast quality).
 - Sensitivities (battery size 5/10 … 100/200, price-forecast noise, imbalance factors, charge limit factor, wear cost, allow_sell) are run on October for information only.
 - Price-error sensitivity: perfect demand, zero-mean normal noise per block on the true block prices (σ ∈ {0,5,10,20,30,45,60,80}, 5 seeds), the product's rules; reference = the zero-noise run with the SAME rules (lost saving = cost(σ) − cost(0)); the zero-noise run's gap to the ceiling / block oracle is reported separately as the policy cost.
-- Bootstrap CI: whole days resampled with replacement (paired: same days for both strategies), 1000 draws, seed from config; the inventory adjustment enters as a constant shift.
+- Bootstrap CI: whole days resampled with replacement (paired: same days for both strategies), 1000 draws, seed from config; the inventory adjustment enters as a constant shift. This assumes independent days.
+- Block-bootstrap CI (`reports/backtest_ci_sensitivity.csv`, `analysis.ci_sensitivity`): circular moving-block bootstrap with 7-day blocks of the product's daily saving vs the baseline, 1000 draws, same seed, same inventory shift; reported with the lag-1 autocorrelation of the daily savings (October 0.57 → CHF 129,685 to 354,460 instead of 158,868 to 306,077).

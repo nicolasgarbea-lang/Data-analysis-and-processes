@@ -13,7 +13,8 @@
 - **Imbalance price** (p = actual day-ahead price of the hour): a shortage costs **p + 0.20 x |p|** per MWh, a surplus is sold for **p - 0.20 x |p|** per MWh (shortage factor 1.2, surplus factor 0.8; |p| keeps it a penalty at negative prices). These are assumptions, not Swissgrid's real imbalance prices.
 - Every strategy starts each period with the battery at 20 MWh. Because strategies end the period with different amounts of energy in the battery, we also report an **inventory-adjusted** cost: energy left in the battery at the end minus at the start (MWh) x discharge efficiency (0.949) x the period's mean actual day-ahead price, subtracted from the cost. Savings are shown raw and adjusted; '% of ceiling' uses the adjusted numbers.
 - **Ceiling (6)** = one hourly perfect-foresight plan over the WHOLE period, ending with the same charge level it started with, physical wear only, no limits or margins. It is a true lower bound on cost: no strategy that follows the same battery rules can be cheaper over the period. **(5)** is perfect foresight with the same 4-hour block rules as the product (uniform dispatch inside a block, back to the start level every evening); it is NOT a ceiling.
-- CI = 95 % paired day-bootstrap interval (1000 draws) of the saving vs strategy 1.
+- **(5b)** is hourly perfect foresight planned day by day with the same end-of-day target as (5). It splits the gap between (5) and (6) into finer dispatch (5 -> 5b) and inter-day flexibility (5b -> 6).
+- CI = 95 % paired day-bootstrap interval (1000 draws) of the saving vs strategy 1. It treats the days as independent; see the block-bootstrap interval below for a wider, more honest one.
 
 ## Test month (October 2026)
 
@@ -27,6 +28,7 @@ Demand forecast: **ML**; price forecast: **ML**.
 | 4 ML + battery (product, tuned) | 45,459,321 | 226,499 | 226,499 | 158,868 | 306,077 | 60% | 45,466 | 76% | 133,812 | +0.0 | 30.8 | 0 | 98% |
 | 4b ML + battery, block plan, defaults | 45,477,016 | 208,805 | 208,022 | 139,322 | 292,420 | 56% | 26,988 | 45% | 134,666 | -4.0 | 22.2 | 0 | 84% |
 | 5 Perfect foresight, same 4-hour block rules | 45,342,699 | 343,121 | 343,121 | 269,758 | 428,403 | 92% | 28,305 | 47% | 0 | +0.0 | 23.7 | 1 | 100% |
+| 5b Perfect foresight, hourly, daily reset | 45,315,697 | 370,123 | 370,123 | 297,478 | 456,068 | 99% | 55,307 | 92% | 0 | +0.0 | 30.3 | 0 | 100% |
 | 6 Perfect foresight, hourly (ceiling) | 45,311,029 | 374,791 | 374,791 | 297,661 | 464,903 | 100% | 59,975 | 100% | 0 | +0.0 | 30.6 | 0 | 100% |
 | 7 Perfect demand, no battery | 45,371,004 | 314,816 | 314,816 | 240,757 | 403,725 | 84% |  |  | 0 | +0.0 | 0.0 | 31 |  |
 
@@ -34,7 +36,8 @@ Demand forecast: **ML**; price forecast: **ML**.
   - of the battery part: plain block plan with defaults (2-4b) CHF 26,988, added by the tuned rules / hourly shaping (4b-4) CHF 18,477.
 - The ceiling (6) would save CHF 374,791; the product captures **60%** of it. Of the ceiling's battery value (7-6 = CHF 59,975) the product's battery captures **76%**.
 - Cost of demand-forecast errors (vs perfect demand, no battery): naive CHF 314,816, ML CHF 133,782.
-- The 4-hour block rules cost CHF 31,670 of battery value even with perfect foresight (5 vs 6; block-rule battery value CHF 28,305).
+- Perfect foresight with 4-hour block rules (5) is CHF 31,670 short of the ceiling (6) (block-rule battery value CHF 28,305).
+  - of this, CHF 27,002 is finer dispatch (5 -> 5b: hourly instead of 4-hour blocks, still back to the start level every evening; battery value 5b CHF 55,307) and CHF 4,668 is inter-day flexibility (5b -> 6: moving energy between days, which the daily plans never do).
 
 ## Validation month (September 2026)
 
@@ -48,6 +51,7 @@ Demand forecast: **ML**; price forecast: **ML**.
 | 4 ML + battery (product, tuned) | 32,677,950 | 205,895 | 205,895 | 164,914 | 246,979 | 65% | 86,811 | 82% | 90,016 | +0.0 | 29.7 | 0 | 99% |
 | 4b ML + battery, block plan, defaults | 32,697,451 | 186,394 | 186,394 | 146,664 | 226,502 | 59% | 67,310 | 64% | 90,261 | +0.0 | 27.1 | 0 | 95% |
 | 5 Perfect foresight, same 4-hour block rules | 32,606,291 | 277,554 | 277,554 | 239,623 | 319,084 | 88% | 68,483 | 65% | 0 | +0.0 | 27.9 | 0 | 100% |
+| 5b Perfect foresight, hourly, daily reset | 32,575,777 | 308,068 | 308,068 | 269,575 | 350,783 | 98% | 98,997 | 94% | 0 | +0.0 | 29.8 | 0 | 100% |
 | 6 Perfect foresight, hourly (ceiling) | 32,568,977 | 314,868 | 314,868 | 274,352 | 357,294 | 100% | 105,796 | 100% | 0 | +0.0 | 29.7 | 0 | 100% |
 | 7 Perfect demand, no battery | 32,674,774 | 209,071 | 209,071 | 166,527 | 256,576 | 66% |  |  | 0 | +0.0 | 0.0 | 30 |  |
 
@@ -55,7 +59,8 @@ Demand forecast: **ML**; price forecast: **ML**.
   - of the battery part: plain block plan with defaults (2-4b) CHF 67,310, added by the tuned rules / hourly shaping (4b-4) CHF 19,501.
 - The ceiling (6) would save CHF 314,868; the product captures **65%** of it. Of the ceiling's battery value (7-6 = CHF 105,796) the product's battery captures **82%**.
 - Cost of demand-forecast errors (vs perfect demand, no battery): naive CHF 209,071, ML CHF 89,987.
-- The 4-hour block rules cost CHF 37,313 of battery value even with perfect foresight (5 vs 6; block-rule battery value CHF 68,483).
+- Perfect foresight with 4-hour block rules (5) is CHF 37,313 short of the ceiling (6) (block-rule battery value CHF 68,483).
+  - of this, CHF 30,513 is finer dispatch (5 -> 5b: hourly instead of 4-hour blocks, still back to the start level every evening; battery value 5b CHF 98,997) and CHF 6,800 is inter-day flexibility (5b -> 6: moving energy between days, which the daily plans never do).
 
 ## Rolling period (2025-10-01 to 2026-08-31)
 
@@ -69,6 +74,7 @@ Demand forecast: **ML**; price forecast: **ML**.
 | 4 ML + battery (product, tuned) | 261,326,490 | 2,176,783 | 2,176,783 | 1,954,351 | 2,419,122 | 66% | 606,994 | 84% | 997,835 | +0.0 | 321.2 | 1 | 97% |
 | 4b ML + battery, block plan, defaults | 261,443,850 | 2,059,424 | 2,059,424 | 1,837,950 | 2,295,493 | 63% | 489,634 | 68% | 998,268 | +0.0 | 284.9 | 1 | 93% |
 | 5 Perfect foresight, same 4-hour block rules | 260,441,830 | 3,061,444 | 3,061,444 | 2,815,876 | 3,319,734 | 93% | 494,577 | 69% | 0 | +0.0 | 269.1 | 11 | 100% |
+| 5b Perfect foresight, hourly, daily reset | 260,277,919 | 3,225,354 | 3,225,354 | 2,977,030 | 3,481,884 | 98% | 658,487 | 91% | 0 | +0.0 | 318.4 | 0 | 100% |
 | 6 Perfect foresight, hourly (ceiling) | 260,216,442 | 3,286,831 | 3,286,831 | 3,035,500 | 3,544,377 | 100% | 719,964 | 100% | 0 | +0.0 | 323.0 | 0 | 100% |
 | 7 Perfect demand, no battery | 260,936,407 | 2,566,867 | 2,566,867 | 2,330,157 | 2,820,212 | 78% |  |  | 0 | +0.0 | 0.0 | 335 |  |
 
@@ -76,7 +82,18 @@ Demand forecast: **ML**; price forecast: **ML**.
   - of the battery part: plain block plan with defaults (2-4b) CHF 489,634, added by the tuned rules / hourly shaping (4b-4) CHF 117,360.
 - The ceiling (6) would save CHF 3,286,831; the product captures **66%** of it. Of the ceiling's battery value (7-6 = CHF 719,964) the product's battery captures **84%**.
 - Cost of demand-forecast errors (vs perfect demand, no battery): naive CHF 2,566,867, ML CHF 997,078.
-- The 4-hour block rules cost CHF 225,387 of battery value even with perfect foresight (5 vs 6; block-rule battery value CHF 494,577).
+- Perfect foresight with 4-hour block rules (5) is CHF 225,387 short of the ceiling (6) (block-rule battery value CHF 494,577).
+  - of this, CHF 163,910 is finer dispatch (5 -> 5b: hourly instead of 4-hour blocks, still back to the start level every evening; battery value 5b CHF 658,487) and CHF 61,477 is inter-day flexibility (5b -> 6: moving energy between days, which the daily plans never do).
+
+## How wide is the interval with correlated days?
+
+Daily savings are correlated from one day to the next. The table compares the independent-day interval with a circular 7-day block bootstrap (`reports/backtest_ci_sensitivity.csv`, product (4) vs baseline (1), inventory-adjusted).
+
+| split | days | saving | lag-1 autocorr. | CI low (indep.) | CI high (indep.) | CI low (block) | CI high (block) |
+|---|---|---|---|---|---|---|---|
+| val | 30.00 | 205,895.03 | 0.28 | 164,913.57 | 246,979.35 | 159,019.70 | 254,855.79 |
+| test | 31.00 | 226,499.26 | 0.57 | 158,868.22 | 306,077.26 | 129,684.51 | 354,460.35 |
+| rolling | 335.00 | 2,176,783.34 | 0.64 | 1,954,351.05 | 2,419,122.01 | 1,773,742.59 | 2,624,798.88 |
 
 Note: the decision rules were tuned on the rolling period plus September 1-29, so the September and rolling numbers are in-sample for those rules (the forecasts themselves are out-of-sample). Only October is a clean test of the rules.
 

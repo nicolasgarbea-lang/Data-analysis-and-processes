@@ -162,6 +162,15 @@ def plan_table(pl: pd.DataFrame) -> pd.DataFrame:
     return t
 
 
+def imbalance_help() -> str:
+    sf = D.cfg()["imbalance"]["shortage_price_factor"]
+    uf = D.cfg()["imbalance"]["surplus_price_factor"]
+    return (f"Penalty part of the imbalance only (assumed rule, not Swissgrid's real prices). With p = the hour's "
+            f"auction price, a shortfall is bought at p + {sf - 1:.1f}·|p| and a surplus sold at p − {1 - uf:.1f}·|p|. "
+            f"The penalty is the {sf - 1:.1f}·|p| per MWh on top of the auction price. The full imbalance "
+            "settlement (penalty plus the shortfall or surplus valued at p) is part of the realised cost.")
+
+
 def soc_start_for(date_str: str, version, battery: dict) -> tuple[float, str]:
     """Charge level at the start of the day: carried from the stored backtest (same share
     of capacity for a custom battery, kept inside its limits), else the config start level."""
@@ -214,15 +223,16 @@ def tab_tomorrow(d: dt.date, version):
                 delta_color="normal",
                 help="What the day really cost: auction purchases at the real prices + imbalance + wear. "
                      "Battery saving = same ML demand forecast without battery, minus this.")
-    k[4].metric("Imbalance cost", chf(None if summ is None else summ["imbalance_penalty_chf"]),
-                help="Extra cost because actual demand differed from what we bought: shortfalls are bought "
-                     f"at {D.cfg()['imbalance']['shortage_price_factor']:g} x the price, surpluses sold at "
-                     f"{D.cfg()['imbalance']['surplus_price_factor']:g} x the price (assumed rule).")
+    k[4].metric("Imbalance penalty", chf(None if summ is None else summ["imbalance_penalty_chf"]),
+                help=imbalance_help())
     note(f"Battery {bat['power_mw']:g} MW / {bat['capacity_mwh']:g} MWh; charge level at the start of the day "
          f"{soc0:,.1f} MWh ({soc_src}). Decision rules: {r['decision']}.")
 
     st.divider()
-    show_actual = st.toggle("Show what really happened", value=True, key="show_actual")
+    show_actual = st.toggle("Show actual values in the forecast charts", value=True, key="show_actual",
+                            help="Only changes the two forecast charts below. The realised cost, the imbalance "
+                                 "penalty and the hourly settlement table always use the actual values, because "
+                                 "they are known only after the day.")
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("**Demand forecast** (average MW per block)")
@@ -328,7 +338,10 @@ def tab_battery(d: dt.date, version):
                          (int(round(base["soc_min_frac"] * 100)), int(round(base["soc_max_frac"] * 100))), 5,
                          key="bat_range", help="The battery is kept between these levels to protect it.")
     cyc = c[1].slider("Max full cycles per day", 0.5, 3.0, float(base["max_cycles_per_day"]), 0.5, key="bat_cyc",
-                      help="One cycle = the usable capacity once in and out.")
+                      help="One cycle = the usable capacity (max minus min charge level) DELIVERED to the grid "
+                           "once per day, as defined in the project brief (32 MWh for the default battery). "
+                           "Because of discharge losses this is about 5% more than one physical full cycle of "
+                           "stored energy; the effect is about CHF 1,000 in the test month.")
     allow_sell = c[2].checkbox("Allow selling back to the market", value=bool(D.cfg()["battery"].get("allow_sell")),
                                key="bat_sell", help="If on, the battery may also sell energy at the auction.")
     if hi <= lo:
@@ -410,6 +423,60 @@ def tab_battery(d: dt.date, version):
 # ---------------------------------------------------------------------------
 # Tab 3: Month backtest
 # ---------------------------------------------------------------------------
+def ci_row(version, split):
+    """Row of reports/backtest_ci_sensitivity.csv for the split (None if the file is missing)."""
+    t = D.read_csv("backtest_ci_sensitivity.csv", version)
+    if t is None or "split" not in t or split not in set(t["split"]):
+        return None
+    return t[t["split"] == split].iloc[0]
+
+
+def imbalance_caveat(version, split) -> str | None:
+    """Plain-language warning that most of the saving rests on the assumed imbalance penalty,
+    with the half-penalty number from reports/backtest_decision_sensitivity.csv."""
+    t = D.read_csv("backtest_decision_sensitivity.csv", version)
+    dec = D.read_csv("backtest_decomposition.csv", version)
+    if t is None or dec is None or split not in set(dec["split"]):
+        return None
+    r = dec[dec["split"] == split].iloc[0]
+    share = r["demand_forecast_part_chf"] / r["total_saving_chf"] if r["total_saving_chf"] else np.nan
+    text = (f"**Most of this saving depends on the assumed imbalance penalty.** "
+            f"{pct(100 * share)} of it comes from the better demand forecast, and that part is worth only what the "
+            "assumed penalty for being off makes it worth.")
+    h = t[(t["parameter"] == "imbalance_factors") & (t["value"].astype(str) == "1.1/0.9")]
+    if split == "test" and len(h):
+        h = h.iloc[0]
+        text += (f" With half the penalty (±10% instead of ±20%) the October saving would be "
+                 f"{chf(h['saving_ml_battery_vs_baseline_chf'], True)} ({chf(h['demand_forecast_part_chf'], True)} "
+                 f"demand forecast + {chf(h['battery_value_ml_chf'], True)} battery).")
+    text += (" Swissgrid's real settlement (quarter-hourly, single price since 2026) can even reward a deviation "
+             "that helps the system, so these numbers do not prove that the demand forecast is worth more than the "
+             "battery under real settlement.")
+    return text
+
+
+def size_text(bs: pd.DataFrame) -> str:
+    g = bs[bs["strategy"] == PRODUCT]
+    if g.empty:
+        return ""
+    per = g["battery_value_chf"] / g["capacity_mwh"]
+    return (f"For our product the value grows almost in proportion to the size (CHF {per.min():,.0f}-{per.max():,.0f} "
+            "per MWh of capacity), because we assume our bids do not move the auction price.")
+
+
+def price_error_text(pe: pd.DataFrame) -> str:
+    if "slope_chf_per_eur" not in pe:
+        return ""
+    ml = pe[pe["forecast"] == "ml"]
+    out = (f"Fitted slope of this random-noise experiment (October, perfect demand forecast): about "
+           f"{chf(pe['slope_chf_per_eur'].iloc[0])} of battery saving lost per 1 EUR/MWh of block-price error.")
+    if len(ml):
+        m = ml.iloc[0]
+        out += (f" The real price forecast (error {m['price_mae_eur_mwh']:.1f} EUR/MWh) lost only "
+                f"{chf(m['lost_saving_chf'])} under the same rules, so the slope is not a rule of thumb for real "
+                "forecast errors.")
+    return out
+
 def tab_month(version):
     price_notice(version, "backtest")
     summ = D.read_csv("backtest_summary.csv", version)
@@ -435,7 +502,8 @@ def tab_month(version):
                                                                     s["saving_adj_ci_high_chf"])],
         "% of perfect foresight": s["pct_perfect_captured"],
         "Of which battery (CHF)": s["battery_value_adj_chf"],
-        "Imbalance cost (CHF)": s["imbalance_penalty_chf"],
+        "Imbalance penalty (CHF)": s["imbalance_penalty_chf"],
+        "Imbalance settlement (CHF)": s["imbalance_cost_chf"],
         "Days cheaper than baseline": s["days_cheaper_than_baseline"],
     })
     st.dataframe(t, hide_index=True, width="stretch", column_config={
@@ -443,18 +511,37 @@ def tab_month(version):
         "Saving vs baseline (CHF)": st.column_config.NumberColumn(format="localized"),
         "% of perfect foresight": st.column_config.NumberColumn(format="%.0f%%"),
         "Of which battery (CHF)": st.column_config.NumberColumn(format="localized"),
-        "Imbalance cost (CHF)": st.column_config.NumberColumn(format="localized"),
+        "Imbalance penalty (CHF)": st.column_config.NumberColumn(format="localized"),
+        "Imbalance settlement (CHF)": st.column_config.NumberColumn(format="localized"),
     })
     prod = s[s["strategy"] == PRODUCT]
     if len(prod):
         p0 = prod.iloc[0]
+        scope = {"test": "a simulation of one test month", "val": "a simulation of the validation month",
+                 "rolling": "a simulation of the rolling period"}.get(split, "a simulation")
         st.markdown(f"**Our product saves {chf(p0['saving_vs_baseline_adj_chf'], True)}** over {int(p0['days'])} days "
-                    f"(95% interval {chf(p0['saving_adj_ci_low_chf'], True)} to {chf(p0['saving_adj_ci_high_chf'], True)}), "
-                    f"that is **{pct(p0['pct_perfect_captured'])} of what perfect foresight could save**.")
+                    f"(95% interval {chf(p0['saving_adj_ci_low_chf'], True)} to {chf(p0['saving_adj_ci_high_chf'], True)} "
+                    f"if the days were independent), that is **{pct(p0['pct_perfect_captured'])} of what perfect "
+                    f"foresight could save**. This is {scope} with assumed imbalance prices and a fictional battery.")
+        ci = ci_row(version, split)
+        if ci is not None:
+            note(f"Similar days come in runs (day-to-day correlation of the daily saving "
+                 f"{ci['lag1_autocorr_daily_saving']:.2f}). Re-sampling whole weeks instead of single days "
+                 f"({int(ci['block_length_days'])}-day block bootstrap) gives a wider 95% interval: "
+                 f"{chf(ci['ci_block_low_chf'], True)} to {chf(ci['ci_block_high_chf'], True)}.")
+        if split in ("rolling", "val"):
+            note("This period (the rolling year plus September 1-29) was used to tune the decision rules, so its "
+                 "saving is not an out-of-sample test of the rules (the forecasts themselves are out-of-sample). "
+                 "Only October is a clean test.")
+        caveat = imbalance_caveat(version, split)
+        if caveat:
+            st.warning(caveat)
     note("Baseline = buy last week's demand of the same block, no battery. Perfect foresight = knowing the "
          "real demand and prices in advance (hourly plan) - the best possible result, not reachable in practice. "
          "95% interval = range of the saving when the days are re-sampled (bootstrap). Costs include the "
-         "inventory adjustment: energy left in the battery at the end is valued at the period's mean price.")
+         "inventory adjustment: energy left in the battery at the end is valued at the period's mean price. "
+         "Imbalance penalty = the assumed extra charge for being off (p ± 0.2·|p| per MWh, p = auction price); "
+         "imbalance settlement = everything paid or received for the deviations, penalty included.")
 
     st.markdown("**Saving over time**")
     dd = daily[daily["split"] == split]
@@ -472,6 +559,11 @@ def tab_month(version):
              f"{chf(row['demand_forecast_part_chf'], True)} come from the better demand forecast (less imbalance) and "
              f"{chf(row['battery_part_chf'], True)} from the battery. The best possible battery would add "
              f"{chf(row['ceiling_battery_value_chf'], True)}; we capture {pct(row['pct_ceiling_battery_value_captured'])} of it.")
+        if "finer_dispatch_part_chf" in row and pd.notna(row.get("finer_dispatch_part_chf")):
+            note(f"With perfect foresight, planning in 4-hour blocks gives up {chf(row['block_rule_cost_chf'])} of "
+                 f"battery value compared with the best possible plan: {chf(row['finer_dispatch_part_chf'])} because "
+                 f"blocks are coarser than hours, and {chf(row['interday_flexibility_part_chf'])} because each day "
+                 "ends at the same charge level (no energy moved between days).")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -479,8 +571,8 @@ def tab_month(version):
         st.markdown("**Bigger or smaller battery** (test month)")
         if bs is not None:
             show(charts.battery_size_chart(bs), key="bt_size")
-            note("Saving from the battery alone for different sizes (all 2-hour batteries). The value grows less "
-                 "than the size: the biggest price gaps of a day are used first."
+            note("Saving from the battery alone for different sizes (all 2-hour batteries). "
+                 + size_text(bs)
                  + (" This sensitivity is computed for October only." if split != "test" else ""))
     with c2:
         pe = D.read_csv("backtest_price_error_sensitivity.csv", version)
@@ -488,7 +580,8 @@ def tab_month(version):
         if pe is not None:
             show(charts.price_error_chart(pe), key="bt_perr")
             note("We add random errors to the real prices and plan with them: the bigger the error, the more of the "
-                 "battery saving is lost. The marked points show the real forecasts."
+                 "battery saving is lost. The marked points show the real forecasts. "
+                 + price_error_text(pe)
                  + (" This sensitivity is computed for October only." if split != "test" else ""))
     ds_ = D.read_csv("backtest_decision_sensitivity.csv", version)
     if ds_ is not None:
@@ -553,9 +646,10 @@ def tab_drivers(version):
                 with st.expander(f"Full notes of the {target} model (what was tried, limitations)"):
                     st.markdown(notes)
             if target == "demand":
-                note("Past demand (same block on the last known day) dominates, then weekday and holidays, "
-                     "then weather (mainly solar radiation). EVs and events add nothing measurable to the "
-                     "4-hour city load - see the notes below each chart further down.")
+                note("Past demand (same block on the last known day) dominates, then weekday/weekend and holidays, "
+                     "then weather as the fourth group (mainly solar radiation). EVs and events add little "
+                     "incremental predictive value to the 4-hour city load in this model (not a causal statement) "
+                     "- see the notes below each chart further down.")
     st.markdown("**Model ladder** - from the simplest rule to the final model (error per block)")
     c1, c2 = st.columns(2)
     for col, target, unit in [(c1, "demand", "MW"), (c2, "price", "EUR/MWh")]:
@@ -624,8 +718,8 @@ def tab_drivers(version):
                                    hovertemplate="%{y:,.0f} MW"))
         show(layout(fig, "Month", "Average demand 00-04 (MW)", height=300, legend=False), key="drv_night")
     note("The number of EVs grows steadily, but night demand shows no matching rise - it moves with the seasons. "
-         "The model found **no measurable effect of the EV inputs**: their slow trend is already contained in "
-         "recent demand, and removing them did not make the forecast worse.")
+         "The EV inputs add **little incremental predictive value** in this model: their slow trend is already "
+         "contained in recent demand, and removing them did not make the forecast worse.")
 
     h = D.hourly_actuals()
     days = f.drop_duplicates("delivery_date").set_index("delivery_date")
@@ -665,8 +759,8 @@ def tab_drivers(version):
             show(layout(fig, "Hour of the day (Swiss local time)", "Average demand (MW)", height=340),
                  key="drv_sp")
             note(f"Average over {len(sp)} Street Parade Saturdays and {len(others)} other Saturdays around them. "
-                 "Even an event with almost a million visitors barely changes the city's total load - the model "
-                 "found no measurable effect of events.")
+                 "Even an event with almost a million visitors barely changes the city's total load; in the model the "
+                 "event inputs add little incremental predictive value (not a causal statement).")
         else:
             st.info("No Street Parade day in the feature table.")
 
@@ -805,7 +899,7 @@ def tab_method(version):
 | Swiss and neighbouring day-ahead prices | all of day D (that auction was held on D-1) |
 | Gas, CO₂, EUR/CHF | last close published before the forecast time |
 | Reservoir levels | latest weekly value already published |
-| Weather for D+1 | the **forecast** issued on day D (training before 2024 uses observed weather - a limitation) |
+| Weather for D+1 | the **forecast available by 10:00** on day D under the assumed release delays (for most hours the model run from the day before). The full ICON forecast archive starts in January 2024 (coarser JMA forecasts back to 2018); older training rows use observed weather - a limitation |
 | Calendar, holidays, events | known in advance |
 """)
     note("Times are Swiss local time; data is stored in UTC. On clock-change days a block has 3 or 5 hours. "
@@ -827,9 +921,13 @@ def tab_method(version):
     st.markdown(
         "- **The battery and the company are fictional**; the demand and prices are real.\n"
         "- **Imbalance prices are assumed** (factors above), so the CHF value of a better demand forecast depends "
-        "on them - see the sensitivity table in the Month backtest tab.\n"
-        "- **Weather in older training years is observed**, not forecast (no forecast archive exists); the test "
-        "months use real forecasts.\n"
+        "on them - see the sensitivity table in the Month backtest tab. Swissgrid's real settlement is "
+        "quarter-hourly with a single price since 2026.\n"
+        "- **One cycle** = the usable capacity delivered to the grid once per day (the brief's definition), about 5% "
+        "more than one physical full cycle.\n"
+        "- **Weather in older training years is partly observed**, not forecast: the full ICON forecast archive "
+        "starts in January 2024 (only coarser JMA forecasts exist back to 2018). The test months use real "
+        "forecasts available by 10:00 under the assumed release delays.\n"
         "- **One test month** (October 2026) gives wide uncertainty intervals; the rolling year is a robustness "
         "check.\n"
         "- **We are a price taker**: our bids do not move the auction price; a charge bid clears fully or not at all.\n"

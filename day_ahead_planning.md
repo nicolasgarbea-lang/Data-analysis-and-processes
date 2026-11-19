@@ -9,7 +9,8 @@
 **User:** **Limmat Energie AG**, a *fictional* **DSO** (distribution system operator) that supplies the city of
 **Zurich**. It sits between the national grid operator (TSO, Swissgrid) and the homes and businesses of Zurich. Its
 demand is the **real ewz grid load of the city of Zurich**. It has to buy the energy its customers will use, and it
-owns a fictional **grid battery of 20 MW / 40 MWh** (usable 10–90 %, 90 % round trip, at most one cycle per day).
+owns a fictional **grid battery of 20 MW / 40 MWh** (usable 10–90 %, 90 % round trip, at most one cycle per day;
+one cycle = 32 MWh delivered to the grid, the brief's definition).
 
 **Why Switzerland and Zurich:** the day-ahead price is the same for the whole of Switzerland (one price zone), so the
 price model is Swiss. Demand is local, so the demand model is for the city of Zurich, which publishes its grid load
@@ -53,11 +54,11 @@ Everything is **known on day D at 10:00** (checked by an automated leakage test)
 |---|---|---|
 | **Recent demand** | Same block on D−1 and one/four weeks back | By far the strongest demand driver |
 | **Recent prices** | All prices of day D, 7-day block shape | Strongest price driver |
-| **Weather** | Real ICON forecast for tomorrow (temperature, radiation) | Second-strongest group; radiation matters most |
-| **Rooftop solar** | Radiation forecast, lagged Swiss solar | Enters through the radiation forecast; lagged solar adds almost nothing |
+| **Weather** | ICON forecast for tomorrow available by 10:00 (temperature, radiation) | Fourth demand group (7.01 MW) after past demand, weekday/weekend and holidays; radiation matters most |
+| **Rooftop solar** | Radiation forecast, lagged Swiss solar | Enters through the radiation forecast; lagged solar adds almost nothing (0.013 MW) |
 | **EVs** | Electric cars in Zurich, charging power in canton Zurich | No measurable effect on 4-hour load yet |
-| **Calendar** | Block, weekday, holidays, school holidays, half-holidays | Essential (holidays: 4.49 vs 52.54 MW error for the naive rule) |
-| **Events** | Street Parade, Züri Fäscht, Sechseläuten, home games | No measurable effect on city load |
+| **Calendar** | Block, weekday, holidays, school holidays, half-holidays | Essential (six public holidays outside 24 Dec – 2 Jan: 4.49 vs 52.54 MW error for the naive rule; all ten: 5.60 vs 48.32 MW; weak spot: delivery two days after a holiday, 6.60 MW) |
+| **Events** | Street Parade, Züri Fäscht, Sechseläuten, home games | Little incremental predictive value in this model (October error 3.47 without vs 3.63 MW with them, single seed, within noise); not a causal statement |
 | **Price drivers** | DE/FR/AT/IT prices of day D, gas, CO₂, EUR/CHF, reservoirs, German wind/solar forecasts | Neighbours, gas and German wind help a little; reservoirs add nothing |
 | **Battery** | Power, capacity, efficiency, wear cost | Storage constraints only – **not** a demand input |
 
@@ -82,20 +83,26 @@ flowchart TD
 
 ## 6. Key results (October 2026 test month)
 
+*A simulation of **one test month**, with **assumed imbalance prices** (p ± 0.2·|p|) and a **fictional battery**.*
+
 | | Result |
 |---|---|
 | Demand forecast error | **3.34 MW** MAE (1.11 %); naive 9.58 MW |
 | Price forecast error | **10.99 EUR/MWh** MAE; naive 23.47 EUR/MWh |
-| Saving vs "naive demand, no battery" | **CHF 226,499** (0.50 % of the purchase cost) |
-| … from the better demand forecast | CHF 181,033 |
+| Saving vs "naive demand, no battery" | **CHF 226,499** (0.50 % of the baseline's total cost incl. imbalance); 95 % interval 129,685 to 354,460 (7-day blocks; 158,868 to 306,077 if days were independent) |
+| … from the better demand forecast | CHF 181,033 – about 80 % of the saving, and it rests on the assumed imbalance penalty |
 | … from the battery | CHF 45,466 (76 % of the best possible battery value) |
+| With half the assumed penalty (±10 %) | CHF 135,998 (demand 90,517 + battery 45,481) |
 | Share of the perfect-foresight ceiling | 60 % |
-| Cost of the 4-hour block simplification (perfect foresight) | CHF 31,670 of battery value |
-| Battery value vs size | almost linear, ~CHF 1,137 per MWh of capacity per month |
-| Price error | CHF 475 of battery saving lost per 1 EUR/MWh of MAE per month |
-| Year Oct 2025 – Sep 2026 (backtest) | CHF 2,382,678, of which CHF 693,805 battery |
+| 4-hour blocks vs best plan (perfect foresight) | CHF 31,670 less battery value: CHF 27,002 coarser dispatch, CHF 4,668 no energy moved between days |
+| Battery value vs size | nearly proportional, CHF 1,134–1,138 per MWh of capacity per month (price-taker assumption) |
+| Price error | about CHF 475 lost per 1 EUR/MWh of random block-price error (perfect demand); the real ML forecast lost CHF 610 |
+| Rolling period Oct 2025 – Aug 2026 (used for tuning the rules) + September (validation) | CHF 2,382,678, of which CHF 693,805 battery – **not an out-of-sample test** |
 
-**Main insight:** a good demand forecast is worth about four times the battery. Details: `reports/report.md`.
+**Main insight:** under the assumed imbalance prices, a good demand forecast is worth about four times the battery.
+Swissgrid's real settlement (quarter-hourly, single price since 2026) can even reward a helpful deviation, so this
+does not prove the ranking under real settlement; real imbalance prices are the first next step. Details:
+`reports/report.md`.
 
 ## 7. Decided questions (were open in v5)
 
@@ -103,9 +110,9 @@ flowchart TD
 |---|---|
 | Block size: 4-hour blocks or 24 hours? | **Forecast 4-hour blocks, plan and bid hourly.** The backtest showed that block-only planning loses battery value; an hourly price shape inside the blocks won the tuning on pre-October data. |
 | One test month or two? | **One clean test month (October 2026)** plus an 11-month rolling backtest for robustness. January 2026 is prepared as an optional second test month. |
-| Observed weather instead of a forecast? | **Real forecasts** (Open-Meteo ICON, issued before 10:00) wherever they exist, always in validation and test. Observed weather only for training rows before 21 Jan 2024 (no forecast archive); documented limitation. |
-| Who builds the event list? | Built by hand with a source URL for every row; unconfirmed events are listed in `docs/events_unverified.md`. Result: events have no measurable effect. |
-| Keep the battery in the decision? | **Yes**, as a fictional 20 MW / 40 MWh battery with sliders in the app. It adds CHF 45,466 in October, but the demand forecast adds four times more. |
+| Observed weather instead of a forecast? | **Real forecasts** (Open-Meteo ICON, the run available by 10:00 under the assumed release delays, for most hours the run from the day before) wherever they exist, always in validation and test. The full ICON archive starts in January 2024 (coarser JMA forecasts back to 2018 were worse as inputs), so training rows before 21 Jan 2024 use observed weather; documented limitation. |
+| Who builds the event list? | Built by hand with a source URL for every row; unconfirmed events are listed in `docs/events_unverified.md`. Result: events add little incremental predictive value in this model. |
+| Keep the battery in the decision? | **Yes**, as a fictional 20 MW / 40 MWh battery with sliders in the app. It adds CHF 45,466 in October; under the assumed imbalance prices the demand forecast adds four times more. |
 
 ## 8. What changed
 

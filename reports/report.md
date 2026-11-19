@@ -21,24 +21,37 @@ must buy tomorrow's electricity on the Swiss day-ahead auction, which closes at 
 blocks of day D+1, plans the battery with a small optimisation model, turns the plan into hourly auction bids and,
 in the backtest, settles them with the real prices and the real demand.
 
-**Key results (test month October 2026, everything chosen before October):**
+**Key results (test month October 2026).** All model and decision choices were made before October. One weather
+pre-processing choice (which method corrects the bias of the temperature forecast) also looked at October weather
+data, but not at October demand or prices (§8).
+
+> **Read the money with care.** The CHF numbers are a **simulation of one test month** with **assumed imbalance
+> prices** (shortage at p + 0.2·|p|, surplus at p − 0.2·|p|) and a **fictional 20 MW / 40 MWh battery**. About 80 %
+> of the October saving (CHF 181,033 of CHF 226,499) comes from avoiding the assumed imbalance penalty. With half the
+> penalty (±10 %) the saving would be CHF 135,998 (CHF 90,517 demand forecast + CHF 45,481 battery). Swissgrid's real
+> settlement is quarter-hourly with a single imbalance price since 2026, and there a deviation can even help the
+> system. So our numbers do not prove that the demand forecast is worth more than the battery under real settlement.
 
 | | Result |
 |---|---|
 | Demand forecast error (MAE) | **3.34 MW** (1.11 %), naive rule 9.58 MW |
 | Price forecast error (MAE) | **10.99 EUR/MWh**, naive rule 23.47 EUR/MWh |
-| Saving of the product vs the simple rule "buy last week's demand, no battery" | **CHF 226,499** in the month (95 % interval 158,868 to 306,077), 0.50 % of the month's purchase cost |
-| … of which from the better demand forecast | **CHF 181,033** |
+| Saving of the product vs the simple rule "buy last week's demand, no battery" (simulated, assumed imbalance prices) | **CHF 226,499** in the month; 95 % interval 158,868 to 306,077 if the days were independent, 129,685 to 354,460 when runs of 7 days are kept together; 0.50 % of the baseline's total cost including imbalance (CHF 45,685,820) |
+| … of which from the better demand forecast (depends on the assumed penalty) | **CHF 181,033** |
 | … of which from the battery | **CHF 45,466** |
+| Same saving with half the assumed imbalance penalty (±10 %) | CHF 135,998 (demand 90,517, battery 45,481) |
 | Share of the best possible saving (perfect foresight, hourly) | **60 %** (battery alone: 76 % of its best possible value) |
-| Rolling year Oct 2025 – Sep 2026 (365 days) | **CHF 2,382,678** saved, of which CHF 693,805 from the battery |
+| Sum over the rolling period Oct 2025 – Aug 2026 (used for tuning the decision rules) plus September 2026 (validation), 365 days – **not an out-of-sample test** | **CHF 2,382,678** saved, of which CHF 693,805 from the battery |
 
-**The main business insight.** A good demand forecast is worth about four times as much as the battery in the test
-month (CHF 181,033 vs CHF 45,466) and more than twice as much over the whole year. The demand forecast saves money
-by avoiding imbalance penalties; the battery earns money by shifting energy from cheap to dear hours. Even if the
-assumed imbalance penalty is halved, the demand forecast is still worth about twice the battery (§6.6). Battery
-value grows almost exactly in proportion to its size, and every 1 EUR/MWh of price-forecast error costs about
-CHF 475 of battery saving per month.
+**The main business insight.** Under the assumed imbalance prices, the better demand forecast is worth about four
+times as much as the battery in the test month (CHF 181,033 vs CHF 45,466) and more than twice as much over the
+rolling year. The demand forecast saves money by avoiding imbalance penalties; the battery earns money by shifting
+energy from cheap to dear hours. How much the demand forecast is worth depends directly on the assumed penalty
+(§6.6), so this ranking holds for our assumption, not necessarily for Swissgrid's real settlement. Battery value
+grows nearly in proportion to its size in our simulation (CHF 1,134–1,138 per MWh of capacity), because we assume
+the battery does not move prices. In a random-noise experiment with perfect demand, every 1 EUR/MWh of block-price
+error cost about CHF 475 of battery saving per month; our real ML price forecast (error 10.99 EUR/MWh) lost only
+CHF 610 under the same rules.
 
 ---
 
@@ -204,11 +217,13 @@ smaller (March 2023 – October 2026, `notebooks/01_eda.ipynb`).
 | Gas, CO₂, EUR/CHF | last value published before 10:00 (in practice D−1 or earlier) | Exact publication times per source |
 | Reservoir level | value of Sunday, counted as known from Thursday 23:59 | First used on Friday. Changed after the Phase 1 review (was Wednesday). |
 | EVs, charging stations | last value published by day D | Joined as of day D (fixed after the Phase 1 review) |
-| Weather of D+1 | real forecast published before 10:00 on D | Before 21 Jan 2024 no forecast archive exists: observed weather is used **in training only** |
+| Weather of D+1 | forecast available by 10:00 on D under the assumed release delays (for most hours the model run from the day before) | The full ICON forecast archive starts in January 2024 (coarser JMA forecasts exist back to 2018 but were worse as inputs). Before 21 Jan 2024 observed weather is used **in training only** |
 | Calendar, holidays, events | known in advance | |
 
 An automated test (`tests/test_no_leakage.py`) rebuilds features for a sample of rows from data cut at the forecast
-time and checks that they are exactly equal. The Phase 2 reviewer also recomputed 966 feature values by hand with
+time and checks that they are exactly equal. It starts from the **processed** input tables (cut after the forecast
+time, and with "poisoned" future values that must never appear), not from the raw downloads; the raw-to-processed
+step is checked separately by the loader tests and the data checks. The Phase 2 reviewer also recomputed 966 feature values by hand with
 independent code; all matched.
 
 ---
@@ -260,10 +275,15 @@ minimise    Σ_t P_t · buy_t  +  wear · Σ_t dis_t                 (wear = 5 E
 subject to  buy_t = D_t + ch_t − dis_t                             (demand is always covered, no selling back)
             soc_t = soc_{t−1} + 0.949 · ch_t − dis_t / 0.949       (√0.9 efficiency each way)
             4 MWh ≤ soc_t ≤ 36 MWh,  ch_t, dis_t ≤ 20 MW × hours   (10–90 % of 40 MWh, power limit)
-            Σ_t dis_t ≤ 32 MWh                                     (at most one full cycle per day)
+            Σ_t dis_t ≤ 32 MWh                                     (at most one cycle per day, see below)
             soc at the end of the day = 20 MWh                     (back to 50 %)
             ch_t · dis_t = 0                                       (one yes/no variable per period)
 ```
+
+**Cycle definition.** One cycle = 32 MWh **delivered to the grid** per day (the usable range soc_max − soc_min,
+as defined in the project brief). Emptying the full usable stored energy delivers only 32 × 0.949 = 30.36 MWh after
+the discharge losses, so this rule allows about 5 % more than one physical full cycle. On 27 of the 31 October days
+the battery uses this margin. A physical cap would lower the October battery saving by about CHF 1,000 (§8).
 
 The last rule needs a yes/no variable, so the model is a small **mixed-integer** program, solved exactly (zero
 optimality gap) with SciPy's HiGHS solver. Without it the solver could "burn" energy through the losses when prices
@@ -301,14 +321,17 @@ Total cost = auction purchases + imbalance + battery wear. Strategies:
 | 3 | Naive + battery | naive | naive | tuned rules |
 | 4 | **Product** | ML | ML | tuned rules (hourly shape) |
 | 4b | Product, untuned | ML | ML | block plan, config defaults |
-| 5 | Perfect foresight, block rules | actual | actual | same 4-hour block rules |
+| 5 | Perfect foresight, block rules | actual | actual | same 4-hour block rules, back to 20 MWh every evening |
+| 5b | Perfect foresight, hourly, daily reset | actual | actual | hourly plan per day, back to 20 MWh every evening |
 | 6 | **Ceiling** | actual | actual | one hourly plan over the whole period |
 | 7 | Perfect demand | actual | – | none |
 
 The **ceiling** (6) is one perfect-foresight plan over all hours of the period, with the same battery limits and the
 same end level as start level. No strategy that follows the battery rules can be cheaper over the period, so "% of
 ceiling" is a fair score. Strategy 5 is **not** a ceiling: it uses the coarse block rules, and the product beats it on
-battery value.
+battery value. Strategy 5b was added after the final review: it plans hours like the ceiling but, like 5, must end
+every day at the start level. It splits the gap between 5 and 6 into two parts: finer dispatch (hours instead of
+blocks, 5 → 5b) and moving energy between days (5b → 6).
 
 Strategies end the month with different amounts of energy in the battery. We therefore also report
 **inventory-adjusted** costs: the change in stored energy is valued at the month's mean actual price. All savings and
@@ -353,8 +376,9 @@ no protection bid; all alternatives were worse.*
 
 The final model cuts the naive error by about two thirds in every period and is significantly better than plain
 LightGBM in all three periods (Diebold–Mariano p = 0.028 in October, §6.3). The largest errors are in the day-time
-blocks (§6.3). The weak spots are the days after a holiday, when the reference day was itself a holiday: there the
-MAE was 6.60 MW, against 4.55 MW on normal days (rolling period + October, `reports/model_notes_demand.md`).
+blocks (§6.3). The weak spots are delivery days two days after a holiday, when the reference day (two days
+before delivery) was itself a holiday: there the MAE was 6.60 MW, against 4.55 MW on
+normal days (rolling period + October, `reports/model_notes_demand.md`).
 
 ### 6.2 Price model
 
@@ -410,11 +434,13 @@ of the daily level. Source: `reports/decision_metrics_price.csv`.*
 *EUR/MWh; error = forecast − actual. Source: `reports/worst_blocks_price.csv`.*
 
 Eight of the ten worst misses are forecasts that were **too low**, all in day-time and evening blocks. October 2026
-prices rose strongly (gas TTF from about 72 to about 97 EUR/MWh, `reports/model_notes_price.md`), and a model
+prices rose strongly (gas TTF from about 72 EUR/MWh on 30 September to about 97 EUR/MWh on 26 October; the first and
+last October closes were 73.94 and 103.94 EUR/MWh, `data/processed/gas_ttf_daily.parquet`), and a model
 anchored on today's price follows a trend about one day late; the mean October bias is −6.54 EUR/MWh. The biggest
 miss (29 Oct, 16–20, −131.5 EUR/MWh) was a cold, almost wind-still evening in Germany, with a block price far above
-anything since 2023. Two misses (10 and 8 Oct) were days when Switzerland did not follow a German price drop,
-possibly because the cross-border lines were full (a guess: we have no capacity data). There were no negative prices in
+anything since 2023. Two misses (10 and 8 Oct) were days when Swiss and German prices diverged: Switzerland did not
+follow a German price drop. Full cross-border lines would be one explanation, but that is a guess (we have no
+capacity data). There were no negative prices in
 October 2026.
 
 ### 6.3 Significance, uncertainty and errors per block
@@ -422,17 +448,17 @@ October 2026.
 <!-- table:dm_tests -->
 | target | period | comparison | mean daily MAE difference | DM statistic | p-value | days |
 |---|---|---|---|---|---|---|
-| demand | Sept 2026 | best vs naive | -5.79 | -4.77 | 0.000 | 30 |
+| demand | Sept 2026 | best vs naive | -5.79 | -4.77 | <0.001 | 30 |
 | demand | Sept 2026 | best vs gbm | -0.56 | -3.21 | 0.003 | 30 |
 | demand | Oct 2026 | best vs naive | -6.25 | -3.04 | 0.005 | 31 |
 | demand | Oct 2026 | best vs gbm | -0.82 | -2.31 | 0.028 | 31 |
-| demand | Oct 2025–Aug 2026 | best vs naive | -10.41 | -8.18 | 0.000 | 335 |
+| demand | Oct 2025–Aug 2026 | best vs naive | -10.41 | -8.18 | <0.001 | 335 |
 | demand | Oct 2025–Aug 2026 | best vs gbm | -0.63 | -3.16 | 0.002 | 335 |
 | price | Sept 2026 | best vs naive | -9.92 | -3.52 | 0.001 | 30 |
 | price | Sept 2026 | best vs gbm | -2.61 | -3.66 | 0.001 | 30 |
-| price | Oct 2026 | best vs naive | -12.47 | -4.23 | 0.000 | 31 |
-| price | Oct 2026 | best vs gbm | -5.83 | -4.49 | 0.000 | 31 |
-| price | Oct 2025–Aug 2026 | best vs naive | -11.36 | -8.43 | 0.000 | 335 |
+| price | Oct 2026 | best vs naive | -12.47 | -4.23 | <0.001 | 31 |
+| price | Oct 2026 | best vs gbm | -5.83 | -4.49 | <0.001 | 31 |
+| price | Oct 2025–Aug 2026 | best vs naive | -11.36 | -8.43 | <0.001 | 335 |
 | price | Oct 2025–Aug 2026 | best vs gbm | -0.29 | -0.99 | 0.324 | 335 |
 <!-- /table -->
 
@@ -506,15 +532,18 @@ One honest sentence per driver the brief asked about (single-LightGBM sensitivit
 
 - **EVs:** the EV and charging inputs add nothing measurable to the 4-hour forecast (group importance 0.00 MW;
   without them the October MAE was 3.53 instead of 3.63 MW). Their slow growth is already in the recent demand.
-- **Weather:** the most important group after past demand and the calendar; without weather the October error rises
-  from 3.63 to 6.49 MW. Solar radiation matters more than temperature in this mild season, and for the price the
+- **Weather:** the fourth most important input group (7.01 MW), after past demand, weekday/weekend and holidays;
+  without weather the October error rises from 3.63 to 6.49 MW. Solar radiation matters more than temperature in this mild season, and for the price the
   Zurich radiation forecast is the second most important single input (midday solar dip).
-- **Solar:** lagged Swiss solar production adds almost nothing to demand (0.01 MW); the solar effect enters through
+- **Solar:** lagged Swiss solar production adds almost nothing to demand (0.013 MW); the solar effect enters through
   the radiation forecast for the delivery day.
-- **Holidays:** essential. On public holidays the model's error is 4.49 MW against 52.54 MW for the naive rule
-  (`reports/model_notes_demand.md`); the weak spot is the day after a holiday.
-- **Events:** Street Parade, Züri Fäscht, concerts and home games have no measurable effect on 4-hour city load
-  (importance −0.01 MW); removing them changed the error by less than the seed noise.
+- **Holidays:** essential. On the six public holidays outside 24 Dec – 2 Jan the model's error is 4.49 MW against
+  52.54 MW for the naive rule; over all ten public holidays it is 5.60 vs 48.32 MW (`reports/model_notes_demand.md`).
+  The weak spot is delivery two days after a holiday (6.60 MW), when the reference day was a holiday.
+- **Events:** Street Parade, Züri Fäscht, concerts and home games add little incremental predictive value in this
+  model (importance −0.01 MW). Without them the single-seed October error was 3.47 instead of 3.63 MW, a difference
+  within the seed noise. This says nothing about whether events cause load changes; at 4-hour city level the model
+  simply does not need them.
 
 Two more findings: if demand of D−1 were not available at 10:00 (only D−2, as in the public file), the October
 error would rise from 3.63 to 4.70 MW. And with observed instead of forecast weather (not achievable) the September
@@ -543,13 +572,32 @@ September.*
 | 4 ML + battery (product, tuned) | 45,459,321 | 226,499 | 158,868 to 306,077 | 60 % | 45,466 | 133,812 | 30.8 | 0 |
 | 4b ML + battery, block plan, defaults | 45,477,016 | 208,022 | 139,322 to 292,420 | 56 % | 26,988 | 134,666 | 22.2 | 0 |
 | 5 Perfect foresight, same 4-hour block rules | 45,342,699 | 343,121 | 269,758 to 428,403 | 92 % | 28,305 | 0 | 23.7 | 1 |
+| 5b Perfect foresight, hourly, daily reset | 45,315,697 | 370,123 | 297,478 to 456,068 | 99 % | 55,307 | 0 | 30.3 | 0 |
 | 6 Perfect foresight, hourly (ceiling) | 45,311,029 | 374,791 | 297,661 to 464,903 | 100 % | 59,975 | 0 | 30.6 | 0 |
 | 7 Perfect demand, no battery | 45,371,004 | 314,816 | 240,757 to 403,725 | 84 % | – | 0 | 0.0 | 31 |
 <!-- /table -->
 
-*Total cost is raw; "saving vs 1" is inventory-adjusted; CI = 95 % paired bootstrap over days; battery value =
-saving against the same strategy without battery (for 6: against strategy 7). Source:
-`reports/backtest_summary.csv`.*
+*Total cost is raw; "saving vs 1" is inventory-adjusted; CI = 95 % paired bootstrap over days, which treats the days
+as independent (a wider interval follows below); battery value = saving against the same strategy without battery
+(for 5, 5b and 6: against strategy 7). Imbalance penalty = only the extra 0.2·|p| per MWh of deviation; the full
+imbalance settlement of the product (penalty plus the deviation valued at p) is CHF 49,798. Simulation with assumed
+imbalance prices and a fictional battery. Source: `reports/backtest_summary.csv`.*
+
+**How wide is the interval really?** Daily savings are not independent: good and bad days come in runs (lag-1
+autocorrelation of the product's daily saving 0.57 in October). Re-sampling whole 7-day blocks instead of single days
+keeps those runs together and gives a wider interval:
+
+<!-- table:ci_sensitivity -->
+| period | product saving vs 1 (CHF) | lag-1 autocorrelation of daily saving | 95 % interval, independent days | 95 % interval, 7-day blocks |
+|---|---|---|---|---|
+| Oct 2026 (test, 31 days) | 226,499 | 0.57 | 158,868 to 306,077 | 129,685 to 354,460 |
+| Sept 2026 (validation, 30 days) | 205,895 | 0.28 | 164,914 to 246,979 | 159,020 to 254,856 |
+| Oct 2025–Aug 2026 (rolling, 335 days) | 2,176,783 | 0.64 | 1,954,351 to 2,419,122 | 1,773,743 to 2,624,799 |
+<!-- /table -->
+
+*Circular 7-day block bootstrap, 1000 draws, seed 42. Source: `reports/backtest_ci_sensitivity.csv`. We treat the
+wider interval as the more honest one: in October the saving is clearly positive, but anywhere between about
+CHF 130,000 and CHF 354,000 is plausible.*
 
 ![Extra cost over "perfect demand, no battery", October 2026](figures/backtest_cost_breakdown.png)
 
@@ -566,8 +614,21 @@ saving against the same strategy without battery (for 6: against strategy 7). So
 <!-- /table -->
 
 *"From better demand forecast" = 1 − 2; "from battery" = 2 − 4; split into the plain block plan (2 − 4b) and the
-extra from hourly shaping and tuning (4b − 4). "Cost of 4-hour block rule" = battery value of 6 minus that of 5:
-what the block simplification costs even with perfect foresight. Source: `reports/backtest_decomposition.csv`.*
+extra from hourly shaping and tuning (4b − 4). "Cost of 4-hour block rule" = battery value of 6 minus that of 5. It
+mixes two things, split in the next table. Source: `reports/backtest_decomposition.csv`.*
+
+**What the gap between the block rules (5) and the ceiling (6) is made of:**
+
+<!-- table:block_rule_split -->
+| period | battery value, 4-hour blocks, daily reset (5) | battery value, hourly, daily reset (5b) | battery value, hourly, whole period (6) | gap 5 → 6 (CHF) | of which finer dispatch (5 → 5b) | of which inter-day flexibility (5b → 6) |
+|---|---|---|---|---|---|---|
+| Oct 2026 (test, 31 days) | 28,305 | 55,307 | 59,975 | 31,670 | 27,002 | 4,668 |
+| Sept 2026 (validation, 30 days) | 68,483 | 98,997 | 105,796 | 37,313 | 30,513 | 6,800 |
+| Oct 2025–Aug 2026 (rolling, 335 days) | 494,577 | 658,487 | 719,964 | 225,387 | 163,910 | 61,477 |
+<!-- /table -->
+
+*5 and 5b both return to 20 MWh every evening; 6 plans the whole period at once and may move energy between days.
+Source: `reports/backtest_decomposition.csv` (columns `finer_dispatch_part_chf`, `interday_flexibility_part_chf`).*
 
 How to read this:
 
@@ -576,11 +637,15 @@ How to read this:
   ML). The product reaches 60 % of the ceiling. Most of the remaining gap is demand-forecast error that no battery
   can fix: perfect demand alone (7) would reach 84 %.
 - **Battery second.** The product's battery captures 76 % of the battery value of the ceiling (CHF 45,466 of
-  CHF 59,975). It cycled 30.8 times in 31 days, was never idle, and 98 % of its charge bids cleared.
-- **The 4-hour block simplification costs a lot of battery value.** Even with perfect foresight, the block rules
-  (5) earn only CHF 28,305 from the battery against CHF 59,975 for the hourly ceiling: CHF 31,670 lost. Our product
-  plans hours inside the blocks (hourly shape) and earns more from the battery than the block rules with perfect
-  foresight. Hourly shaping and tuning add CHF 18,477 in October over the plain block plan.
+  CHF 59,975). It made 30.8 cycles in 31 days (cycle as defined in §5.3), was never idle, and 98.31 % of the
+  offered charge volume cleared (87 of 91 hourly charge bids, 95.60 %).
+- **Planning in 4-hour blocks costs a lot of battery value; moving energy between days costs little.** Even with
+  perfect foresight, the block rules (5) earn only CHF 28,305 from the battery against CHF 59,975 for the hourly
+  ceiling (6): CHF 31,670 less. Most of this, **CHF 27,002, is finer dispatch**: the same perfect foresight with an
+  hourly plan that still returns to 20 MWh every evening (5b) earns CHF 55,307. Only **CHF 4,668 is inter-day
+  flexibility**, which only the period ceiling has. Our product plans hours inside the blocks (hourly shape) and earns
+  more from the battery than the block rules with perfect foresight. Hourly shaping and tuning add CHF 18,477 in
+  October over the plain block plan.
 - **Exceptions.** The product was cheaper than the baseline on 29 of 31 October days. On the other two days the ML
   demand forecast missed more than the naive one. The ceiling is cheapest over every period, as it must be.
 
@@ -605,9 +670,9 @@ period and moves energy between days, so single-day comparisons with it are not 
 
 ### 6.6 Sensitivities (October, for information only; nothing was chosen from them)
 
-**Battery size.** Battery value grows almost exactly in proportion to size: about CHF 1,137 per MWh of capacity per
-month. This is because the city load is far above the battery power, and we assume the battery does not move the
-price (§8).
+**Battery size.** For the tested two-hour batteries, battery value grows nearly in proportion to size: CHF 1,134 to
+1,138 per MWh of capacity per month. We do not have a deeper explanation than our assumption that the battery is a
+price taker (its bids never move the price, §8); a real large battery would flatten the price spreads it lives on.
 
 <!-- table:battery_size -->
 | battery | product battery value (CHF) | per MWh of capacity (CHF) | block-rule oracle (CHF) | ceiling (CHF) | product total saving vs 1 (CHF) |
@@ -624,8 +689,9 @@ price (§8).
 ![Battery value vs battery size](figures/backtest_battery_size_sensitivity.png)
 
 **Price-forecast error.** With perfect demand and the product's rules, we added random errors to the true block
-prices. Every 1 EUR/MWh of block-price MAE costs about **CHF 475 of battery saving per month** (CHF 15 per day). Our
-ML price forecast (MAE 11.0) loses only CHF 610 against perfect prices, the naive forecast (MAE 23.5) CHF 18,081. The
+prices. In this experiment the fitted slope is about **CHF 475 of battery saving per month per 1 EUR/MWh of
+block-price MAE** (CHF 15 per day). This slope holds for random noise with perfect demand only. Our real ML price
+forecast (MAE 11.0) loses only CHF 610 against perfect prices under the same rules, the naive forecast (MAE 23.5) CHF 18,081. The
 ML forecast loses less than random noise of the same size, probably because more of its error is in the daily level
 (day-mean MAE 9.0) than in the shape (7.4), and the battery needs the shape.
 
@@ -669,10 +735,12 @@ ML forecast loses less than random noise of the same size, probably because more
 *Source: `reports/backtest_decision_sensitivity.csv`.*
 
 The value of the demand forecast is **proportional to the assumed imbalance penalty**: CHF 90,517 with factors
-1.1/0.9, CHF 452,584 with 1.5/0.5. The battery value hardly moves. So the exact demand saving depends on an
-assumption, but the ranking does not: even at the mildest penalty the demand forecast is worth about twice the
-battery. A charge limit of 0.9 × expected discharge price lets 98 % of the charge bids clear; a tighter limit (0.7)
-blocks most charging and destroys most of the value.
+1.1/0.9, CHF 452,584 with 1.5/0.5. The battery value hardly moves. Within these assumed multipliers the demand
+forecast stays ahead of the battery (about twice the battery even at ±10 %). But real Swissgrid settlement is
+quarter-hourly with a single price since 2026, and a deviation in the helpful direction can even earn money. The
+multipliers therefore do not prove that the demand forecast is worth more than the battery under real settlement;
+that needs real imbalance prices (§10). A charge limit of 0.9 × expected discharge price − wear cost lets 98.31 % of
+the offered charge volume clear; a tighter limit (0.7) blocks most charging and destroys most of the value.
 
 ### 6.7 Robustness: the rolling year
 
@@ -710,15 +778,19 @@ ceiling, and its battery 84 % of the ceiling's battery value.
 
 ## 7. Business value in CHF
 
-**Per month.** In the test month the product saved CHF 226,499 against the simple rule, or 0.50 % of the month's
-purchase cost of CHF 45,685,820. Of this, CHF 181,033 came from the demand forecast and CHF 45,466 from the battery.
+**Per month.** In the simulated test month the product saved CHF 226,499 against the simple rule, or 0.50 % of the
+baseline's total cost including imbalance (CHF 45,685,820). Of this, CHF 181,033 came from the demand forecast and
+CHF 45,466 from the fictional battery. About 80 % of the saving is avoided imbalance penalty at **assumed** prices:
+with half the penalty (±10 %) the month would save CHF 135,998 (CHF 90,517 demand + CHF 45,481 battery). Real
+Swissgrid settlement (quarter-hourly, single price since 2026) could give a different split, and a deviation can
+even help the system there.
 
 **What scales with what.**
 
 | Part of the saving | Grows with | Evidence |
 |---|---|---|
 | Better demand forecast | the size of the demand error avoided × the imbalance penalty factor × the price level | proportional to the penalty factor (§6.6); varies by month (§6.7) |
-| Battery | battery size × the daily price spread × how well the order of hours is forecast | linear in size (§6.6); high in spring/summer, low in winter (§6.7); CHF 475 lost per 1 EUR/MWh of price error |
+| Battery | battery size × the daily price spread × how well the order of hours is forecast | nearly proportional to size under the price-taker assumption (§6.6); high in spring/summer, low in winter (§6.7); about CHF 475 lost per 1 EUR/MWh of random price error with perfect demand (the real ML forecast lost CHF 610) |
 | Better price forecast | mainly the battery part | ML vs naive prices: CHF 610 vs CHF 18,081 lost |
 
 **A careful extrapolation to one year.** We do **not** multiply October by 12. October had high prices and
@@ -736,9 +808,10 @@ full year, 1 October 2025 to 30 September 2026:
 `reports/backtest_decomposition.csv`; "baseline cost" is the cost of strategy 1. The second row is shown only to
 show how misleading 12 × October would be.*
 
-**Label for this number:** about **CHF 2.4 million per year** (CHF 2,382,678), of which CHF 693,805 from the battery,
-**under the assumed imbalance prices** and with these caveats: the forecasts are out of sample, but the decision rules
-were tuned on these same days, and the model settings were chosen on September 2026, which comes after most of these
+**Label for this number:** about **CHF 2.4 million per year** (CHF 2,382,678), of which CHF 693,805 from the battery.
+It is the **sum over the rolling period (used for tuning the decision rules) plus September (validation) – not an
+out-of-sample test**, and it holds only **under the assumed imbalance prices** and with these caveats: the forecasts
+are out of sample, but the decision rules were tuned on these same days, and the model settings were chosen on September 2026, which comes after most of these
 days (§8). With imbalance factors of 1.1/0.9 instead of 1.2/0.8 the demand part would be roughly halved (§6.6). Whether
 the battery part pays for a 40 MWh battery depends on its investment and operating cost, which is outside this project.
 
@@ -746,18 +819,33 @@ the battery part pays for a 40 MWh battery depends on its investment and operati
 
 ## 8. Critical evaluation
 
-- **Observed vs forecast weather.** No archive of weather forecasts exists before 21 Jan 2024, so training rows
-  before then use observed weather. The model may trust weather slightly too much. Validation and test use only
-  real forecasts issued before 10:00 (October temperature error 0.96 °C, `reports/data_checks.md`), so the reported
-  test errors are honest.
-- **Assumed imbalance prices.** Shortage at 1.2 × and surplus at 0.8 × the auction price are assumptions. Real
-  Swissgrid imbalance prices differ hour by hour. The demand saving depends directly on this (§6.6); the battery
-  value does not.
+- **One weather choice saw October weather.** The coefficients of the temperature bias correction are fitted only on
+  data before September 2026. But the choice of the correction **method** (month-by-hour offsets vs one linear fit)
+  was made by comparing errors on September **and** October 2026 weather (`docs/assumptions_weather.md`). On September
+  alone the single linear fit wins by a hair (0.8929 vs 0.8942 °C); with October included the month-by-hour method
+  wins (0.9288 vs 0.9407 °C). The two methods differ by about 0.001–0.01 °C, so the effect on the forecasts is tiny,
+  and the choice never saw October demand or prices. We did not retrain; we disclose it. All model and decision
+  choices were made before October.
+- **Observed vs forecast weather.** The full ICON forecast archive starts in January 2024 (coarser JMA forecasts exist
+  back to 2018 but were worse as inputs), so training rows before 21 Jan 2024 use observed weather. The model may trust
+  weather slightly too much. Validation and test use only forecasts available by 10:00 under the assumed release
+  delays, which for most hours means the model run from the day before (October temperature error 0.96 °C,
+  `reports/data_checks.md`), so the reported test errors are honest.
+- **Assumed imbalance prices.** Shortage at p + 0.2·|p| and surplus at p − 0.2·|p| are assumptions. They explain
+  CHF 181,033 of the CHF 226,499 October saving (about 80 %); with ±10 % the saving would be CHF 135,998. Real
+  Swissgrid settlement is quarter-hourly with a single imbalance price since 2026, and a deviation that helps the
+  system can even earn money there. The demand saving depends directly on this (§6.6); the battery value does not.
+  Our numbers therefore do not show that the demand forecast beats the battery under real settlement.
+- **Cycle definition.** We keep the brief's rule: one cycle = 32 MWh **delivered** to the grid per day. After
+  discharge losses a full swing of the usable stored energy delivers only 30.36 MWh, so the battery may do about 5 %
+  more than one physical full cycle. In October it did 30.8 cycles by our definition, which is 32.46 full swings of
+  stored energy. A physical cap would lower the October battery saving by about CHF 1,000.
 - **Fictional battery.** Size, efficiency, wear cost and limits are assumptions. We assume the battery is a **price
   taker**: its bids do not move the auction price. For 20 MW in a Swiss market this is reasonable; for 100 MW the
   linear scaling in §6.6 is too optimistic.
 - **One test month and wide intervals.** October has 31 days; the 95 % interval of the product saving is
-  CHF 158,868 to 306,077. The rolling year supports the result, but it is not a second clean test.
+  CHF 158,868 to 306,077 if the days were independent. They are not (lag-1 autocorrelation 0.57); a 7-day block
+  bootstrap gives CHF 129,685 to 354,460. The rolling year supports the result, but it is not a second clean test.
 - **Rules and settings partly chosen with later data.** The decision rules were tuned on the rolling period and
   1–29 September, so those numbers are in-sample for the rules. The model settings (hyper-parameters) were chosen on
   September 2026, after the rolling months. Only October is a fully clean test.
@@ -768,14 +856,20 @@ the battery part pays for a 40 MWh battery depends on its investment and operati
 - **Demand availability.** We assume the DSO knows its own demand up to the end of D−1. The public ewz file was about
   1.5 days behind when we downloaded it. Without the D−1 demand the single-LightGBM October error rises from 3.63 to
   4.70 MW (§6.4).
-- **Unofficial gas price.** HSG LSEG/Bloomberg data was not available; gas prices come from Yahoo `TTF=F`, which is
-  unofficial and licensed for personal/educational use only. CO₂ uses the official EEX primary auctions as a proxy.
+- **Unofficial gas price and data licences.** HSG LSEG/Bloomberg data was not available; gas prices come from Yahoo
+  `TTF=F`, which is unofficial and for personal/educational use only. CO₂ uses the official EEX primary auctions as a
+  proxy (research use). Processed series derived from both are stored in the repository and the app plots the gas
+  series, so the team must check the licences before any public release (README, "Before you publish").
+- **Scope of the leakage test.** The automated leakage test cuts and "poisons" the **processed** input tables after
+  the forecast time and rebuilds the features; it does not replay from the raw downloads. The raw-to-processed step is
+  covered by the loader tests, the data checks and the reviewers' hand checks.
 - **No intraday market.** A real DSO would correct forecast errors on the intraday market before delivery, which
   would lower the imbalance cost of all strategies and shrink the demand saving.
 - **No grid constraints.** The battery's location and the limits of the city grid are ignored.
 - **Block simplification.** Forecasts are per 4-hour block; the hourly shape inside a block is a recent average.
-  With perfect foresight this simplification costs CHF 31,670 of battery value in October.
-- **No cross-border capacity data.** Several large price misses were days when Switzerland decoupled from Germany.
+  With perfect foresight the block rules give up CHF 31,670 of battery value in October against the ceiling:
+  CHF 27,002 from coarser dispatch and CHF 4,668 from not moving energy between days (§6.5).
+- **No cross-border capacity data.** Several large price misses were days when Swiss and German prices diverged.
 
 ---
 
@@ -784,13 +878,15 @@ the battery part pays for a 40 MWh battery depends on its investment and operati
 - **No personal data.** All data is public and aggregated: city-wide load, national prices, weather, yearly car
   counts. No household can be identified.
 - **Smart-meter privacy.** If the idea were extended to household smart-meter data (for example for
-  neighbourhood forecasts), load curves would reveal when people are at home, sleep or travel. That would need
-  consent, aggregation to groups of households, data minimisation and compliance with the Swiss data protection act.
+  neighbourhood forecasts), load curves would reveal when people are at home, sleep or travel. Depending on the
+  purpose and the legal basis, this could need the customers' consent; in any case it would need aggregation to
+  groups of households, data minimisation and compliance with the Swiss Federal Act on Data Protection.
 - **Who benefits.** The savings lower the DSO's purchase cost. Whether customers benefit depends on how tariffs pass
   costs on; for a public utility the fair choice would be to pass them on. Better forecasts also reduce imbalance
   in the national grid, which helps everyone.
-- **Energy use of the models.** Training both models takes about 13 minutes on a laptop (8.3 and 4.7 minutes,
-  model notes). This is negligible next to the 216.6 GWh the city used in October 2026.
+- **Energy use of the models.** Training both models takes about 13 minutes of elapsed time on a laptop (8.3 and
+  4.7 minutes, model notes). We did not measure the energy use, but a laptop running for 13 minutes is negligible
+  next to the 216.6 GWh the city used in October 2026.
 - **Transparency.** Every assumption is listed with a reason (`docs/assumptions.md`), the code is reproducible, and
   independent reviews checked each phase (Appendix B).
 
@@ -800,7 +896,9 @@ the battery part pays for a 40 MWh battery depends on its investment and operati
 
 1. **Real imbalance prices** from Swissgrid instead of the 1.2 / 0.8 factors.
 2. **An intraday correction** step: re-forecast demand in the morning of D+1 and trade the difference.
-3. **Hourly forecasts** instead of 4-hour blocks, to recover more of the CHF 31,670 the block rules lose.
+3. **Hourly forecasts** instead of 4-hour blocks. With perfect foresight, hourly dispatch is worth CHF 27,002 more
+   than block dispatch in October (5 → 5b); our hourly price shape already recovers part of it. Planning several days
+   ahead could add at most another CHF 4,668 (5b → 6), so hourly forecasts matter much more than multi-day plans.
 4. **Better handling of days after holidays and of price trends** (blend in the level model on such days; add a
    trend-following term for prices).
 5. **Cross-border capacity and German renewables forecasts** with verified publication times.
@@ -819,10 +917,17 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m src.pipeline --all                 # download, features, models, backtest, metrics
 .venv/bin/python -m src.pipeline --all --skip-download # rebuild from data/raw/ without internet
 .venv/bin/python -m src.pipeline --features --models   # single steps: --data --features --models --backtest --metrics
-.venv/bin/python -m pytest                             # 154 tests (loaders, leakage, optimiser, bids, backtest, app)
+.venv/bin/python -m pytest                             # 159 tests (loaders, leakage, optimiser, bids, backtest, app)
 .venv/bin/streamlit run app/streamlit_app.py           # the app
 .venv/bin/python reports/make_report_tables.py --check reports/report.md   # tables in this report = result files
 ```
+
+`--all` uses the **frozen** model settings in `models/*.json`. Some steps are separate commands and are not part of
+`--all`: the slow variant comparison and hyper-parameter search (`python -m src.models.demand --experiments --tune`,
+same for `src.models.price`), the report tables (`python reports/make_report_tables.py --fill reports/report.md`)
+and the EDA notebook (`jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb`). The project
+brief asked to run Python with `-I`; that flag stops `python -m src...` from finding the project package
+(ModuleNotFoundError), so the modules are run without `-I` from the project folder.
 
 Random seeds are fixed in `config.yaml`. Notebooks `01_eda` to `04_backtest` show the figures and tables.
 
@@ -836,7 +941,7 @@ Confirmed findings were fixed; the rest are documented. Full log: `docs/review_l
 | 1 Data | Public ewz file lags ~2 days, features use D−1 demand | Kept as an assumption (the DSO reads its own meters); sensitivity run without D−1 demand (§6.4) |
 | 1 Data | Reservoir level treated as known from Wednesday 18:00 | **Fixed:** known from Thursday 23:59, first used on Friday |
 | 1 Data | EV and charging figures joined by delivery day | **Fixed:** joined as of day D |
-| 1 Data | Temperature bias correction fitted up to Aug 2026 and applied to earlier years | Kept, documented: clean for September/October; small look-ahead for the rolling run (error 1.10 → 1.04 °C) |
+| 1 Data | Temperature bias correction fitted up to Aug 2026 and applied to earlier years | Kept, documented: the coefficients are clean for September/October; small look-ahead for the rolling run (error 1.10 → 1.04 °C). Corrected after the final review: the choice of the correction **method** saw September and October weather (see below) |
 | 1 Data | Swiss load quality flag uses a centred 7-day window | Kept: a replay of all 2,848 forecast days changed no feature value |
 | 2 Features | Observed weather before 21 Jan 2024 | Known limitation; training rows only (§8) |
 | 2 Features | COVID index used on the day of announcement | Kept: training rows 2020–2022 only, 0 in validation and test |
@@ -856,6 +961,25 @@ Confirmed findings were fixed; the rest are documented. Full log: `docs/review_l
 | 4 Final review | The ceiling is optimised in EUR with a fixed end level but compared in CHF with an inventory credit; optimising exactly the reported figure would lower it by CHF 653 | Kept, documented (0.2 % of the ceiling's saving) |
 | 4 Final review | The headline saving depends on the assumed imbalance prices | Stated as the main sensitivity (§6.6, §7) |
 
+### Final review
+
+A last independent reviewer rebuilt the whole project from the raw files on Python 3.11 and reproduced both metric
+files, both backtest files, all 154 tests, the leakage suite, the report tables and the notebooks. The findings and
+what we did (models and forecasts were **not** retrained; earlier backtest numbers did not change, we only added
+outputs):
+
+| Finding | What we did |
+|---|---|
+| M1 The choice of the temperature-correction method used September **and** October weather; on September alone the other method wins by 0.001 °C | Not retrained (difference 0.001–0.01 °C, no October demand or prices involved). Disclosed in §1, §8, `docs/assumptions.md` and the review log |
+| M2 The headline saving needs the imbalance assumption next to it (80 % of it is avoided assumed penalty); the 365-day number is not an out-of-sample test | Caveat added next to every headline number (summary box, §6.6, §7, README, one-pager, slides, app); 365-day number relabelled |
+| M3 "4-hour blocks cost CHF 31,670" mixes finer dispatch and moving energy between days | New strategy 5b (hourly perfect foresight, daily reset) and two new columns in `backtest_decomposition.csv`: CHF 27,002 finer dispatch, CHF 4,668 inter-day (§6.5, §10) |
+| M4 One cycle = 32 MWh delivered is about 5 % more than one physical full cycle (about CHF 1,000 in October) | Kept the brief's definition; stated in §5.3, §8, the optimiser docstring, the docs and the app |
+| M5 The 95 % interval assumes independent days; daily savings are correlated (0.57) | 7-day block bootstrap added (`reports/backtest_ci_sensitivity.csv`): CHF 129,685 to 354,460 in October (§6.5, §8) |
+| M6 `--require-ml` could silently drop a day without predictions | **Fixed:** every day of every period must have six finite predictions per target, else the run stops naming the day; new test |
+| M7 Yahoo (gas) and EEX data are for personal/research use, and derived series are in the repository | Not changed; "Before you publish" note in README and `app/README.md` (§8) |
+| Minor | Charge bids cleared by volume vs count; cost denominator named; holiday cohorts named; weather is the fourth demand driver, solar 0.013 MW, events "little incremental value"; gas trend dated; "prices diverged"; price-error slope qualified; battery size "nearly proportional"; forecast availability wording; app labels "imbalance penalty" with the formula; p-values "<0.001"; consent sentence qualified; training time as elapsed time |
+| Brief compliance | Leakage-test scope (processed inputs) stated in §4.4 and §8; separate commands and the `-I` note in Appendix A and the README |
+
 Checked and found correct by the reviewers: local time → UTC conversion of demand incl. all 16 clock-change days,
 units, price series, weather time shifts, school-holiday end dates, event dates, 966 hand-recomputed feature values,
 all 68,688 hourly actuals, all model metrics and tests (reproduced), and all October costs (recomputed from the
@@ -872,9 +996,13 @@ The same outline is saved as `reports/slide_outline.md`.
 4. **Clean, correctly timed data.** ewz end labels and clock changes solved; leakage test; what is known at 10:00.
 5. **Demand forecast: 3.34 MW error, a third of the naive rule.** Ladder chart and October forecast vs actual.
 6. **Price forecast: 10.99 EUR/MWh, and the right order of hours.** Decision metrics; the 29 October spike.
-7. **Weather and holidays drive demand; EVs and events do not (yet).** Importance chart with one line each.
+7. **Past demand, the calendar and weather drive demand; EVs and events add little.** Importance chart with one line each.
 8. **The battery plan in one picture.** One day: forecast prices, charge at midday, discharge in the evening, option labels.
-9. **CHF 226,499 saved in October, 60 % of the best possible.** Strategy table and cumulative chart.
-10. **The demand forecast is worth four times the battery.** Decomposition; holds even with half the imbalance penalty.
-11. **About CHF 2.4 million a year, with honest caveats.** Rolling year; battery size, price error, block rules; limitations.
+9. **Simulated October: CHF 226,499 saved, 60 % of the best possible.** Strategy table and cumulative chart; one test
+   month, assumed imbalance prices, fictional battery; 95 % interval 129,685 to 354,460 (7-day blocks).
+10. **Under assumed imbalance prices, the demand forecast is worth four times the battery.** Decomposition; with half
+    the penalty CHF 135,998 in total; not proven for real Swissgrid settlement. Block rules: CHF 27,002 coarser
+    dispatch + CHF 4,668 no inter-day shift.
+11. **About CHF 2.4 million a year – a backtest sum, not a test.** Rolling period (used for tuning) + September;
+    battery size, price error, block rules; limitations.
 12. **Next: real imbalance prices, intraday, hourly forecasts.** Ethics in one line: no personal data, savings to customers.

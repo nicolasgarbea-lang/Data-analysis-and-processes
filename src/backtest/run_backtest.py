@@ -93,6 +93,9 @@ SOC_TOL = 1e-6
 #   default       = config.yaml defaults (plain block plan)
 #   oracle_block  = perfect foresight with the same 4-hour block rules (no limits, no margin)
 #   oracle_hourly = the CEILING: one hourly perfect-foresight plan over the whole period
+#   oracle_hourly_daily = hourly perfect foresight, but planned day by day with the same
+#                 daily end-of-day target as strategy 5 (no energy moved between days);
+#                 splits "5 vs 6" into finer dispatch (5 -> 5b) and inter-day flexibility (5b -> 6)
 #   given         = exactly the ``decision`` argument (sensitivity runs)
 STRATEGIES = {
     "baseline_naive_no_battery": dict(demand="naive", price=None, battery=False, policy=None),
@@ -101,14 +104,18 @@ STRATEGIES = {
     "ml_battery": dict(demand="ml", price="ml", battery=True, policy="tuned"),
     "ml_battery_block_default": dict(demand="ml", price="ml", battery=True, policy="default"),
     "perfect_foresight_battery": dict(demand="actual", price="actual", battery=True, policy="oracle_block"),
+    "perfect_foresight_hourly_daily_battery": dict(demand="actual", price="actual", battery=True,
+                                                   policy="oracle_hourly_daily"),
     "perfect_foresight_hourly_battery": dict(demand="actual", price="actual", battery=True, policy="oracle_hourly"),
     "perfect_demand_no_battery": dict(demand="actual", price=None, battery=False, policy=None),
 }
 MAIN_STRATEGIES = list(STRATEGIES)
+ORACLE_POLICIES = ("oracle_block", "oracle_hourly", "oracle_hourly_daily")
 BASELINE = "baseline_naive_no_battery"
 PRODUCT = "ml_battery"
 PRODUCT_DEFAULT = "ml_battery_block_default"
 BLOCK_ORACLE = "perfect_foresight_battery"
+HOURLY_DAILY_ORACLE = "perfect_foresight_hourly_daily_battery"
 CEILING = "perfect_foresight_hourly_battery"
 PERFECT_NO_BATTERY = "perfect_demand_no_battery"
 # battery strategy -> the strategy with the same demand forecast but no battery
@@ -117,6 +124,7 @@ NO_BATTERY_PAIR = {
     PRODUCT: "ml_no_battery",
     PRODUCT_DEFAULT: "ml_no_battery",
     BLOCK_ORACLE: PERFECT_NO_BATTERY,
+    HOURLY_DAILY_ORACLE: PERFECT_NO_BATTERY,
     CEILING: PERFECT_NO_BATTERY,
 }
 LABELS = {
@@ -126,6 +134,7 @@ LABELS = {
     PRODUCT: "4 ML + battery (product, tuned)",
     PRODUCT_DEFAULT: "4b ML + battery, block plan, defaults",
     BLOCK_ORACLE: "5 Perfect foresight, same 4-hour block rules",
+    HOURLY_DAILY_ORACLE: "5b Perfect foresight, hourly, daily reset",
     CEILING: "6 Perfect foresight, hourly (ceiling)",
     PERFECT_NO_BATTERY: "7 Perfect demand, no battery",
 }
@@ -695,7 +704,7 @@ def resolve_decision(strategy, decision: DecisionParams | None = None) -> Decisi
     """Decision rules a strategy really uses (oracles: none; 4b: config defaults)."""
     spec, _ = _spec(strategy)
     pol = spec.get("policy")
-    if pol in ("oracle_block", "oracle_hourly"):
+    if pol in ORACLE_POLICIES:
         return ORACLE_DECISION
     if pol == "default":
         return DecisionParams.from_config()
@@ -739,7 +748,7 @@ def plan_day(
     battery = battery or BatteryParams.from_config()
     dec = resolve_decision(spec, decision)
     policy = spec.get("policy")
-    oracle = policy in ("oracle_block", "oracle_hourly")
+    oracle = policy in ORACLE_POLICIES
     if allow_sell is None:
         allow_sell = bool(load_config()["battery"].get("allow_sell", False))
     data = load_data()
@@ -803,7 +812,7 @@ def plan_day(
             shares[m] = block_hour_shares(hours.loc[m, "hour_local"].tolist(), ref)
     need_h = (dem_mw * h_blk)[b_of] * shares
 
-    hourly_mode = bool(spec["battery"]) and (policy == "oracle_hourly" or dec.plan_resolution == "hourly_shape")
+    hourly_mode = bool(spec["battery"]) and (policy in ("oracle_hourly", "oracle_hourly_daily") or dec.plan_resolution == "hourly_shape")
     if hourly_mode:
         hours["period"] = np.arange(len(hours))
         hours["share"] = 1.0
@@ -1131,6 +1140,30 @@ def paired_bootstrap_ci(cost_a, cost_b, n_boot: int = 1000, seed: int = 42, shif
     return float(np.percentile(sums, 2.5)), float(np.percentile(sums, 97.5))
 
 
+def block_bootstrap_index(n_days: int, block_len: int = 7, n_boot: int = 1000, seed: int = 42) -> np.ndarray:
+    """Resampling index (draws x days) of a CIRCULAR moving-block bootstrap.
+
+    Each draw glues together runs of ``block_len`` consecutive days, each run starting on a
+    random day (wrapping round from the last day to the first), and cuts the result to
+    ``n_days``. Runs of consecutive days keep the day-to-day correlation of the savings,
+    which the ordinary day bootstrap (independent days) ignores."""
+    if n_days <= 0:
+        return np.zeros((n_boot, 0), dtype=int)
+    block_len = max(1, min(int(block_len), n_days))
+    n_blocks = -(-n_days // block_len)
+    starts = np.random.default_rng(seed).integers(0, n_days, size=(n_boot, n_blocks))
+    idx = (starts[:, :, None] + np.arange(block_len)[None, None, :]) % n_days
+    return idx.reshape(n_boot, -1)[:, :n_days]
+
+
+def lag1_autocorr(x) -> float:
+    """Lag-1 autocorrelation (Pearson correlation of day t with day t-1)."""
+    x = np.asarray(x, float)
+    if len(x) < 3 or np.std(x[1:]) == 0 or np.std(x[:-1]) == 0:
+        return np.nan
+    return float(np.corrcoef(x[1:], x[:-1])[0, 1])
+
+
 def _boot_ci(x: np.ndarray, n_boot: int, seed: int) -> tuple[float, float]:
     """95% interval of the SUM of daily values when whole days are resampled."""
     return paired_bootstrap_ci(x, np.zeros(len(x)), n_boot, seed)
@@ -1226,6 +1259,9 @@ def decomposition(summary: pd.DataFrame) -> pd.DataFrame:
     * total                = C1 - C4  = demand_forecast_part + battery_part
     * ceiling_battery_value = C7 - C6, block_rule_cost = C5 - C6 (what the 4-hour block
       rules cost under perfect foresight)
+    * block_rule_cost = finer_dispatch_part (C5 - C5b: hourly instead of 4-hour blocks, still
+      back to the start level every evening) + interday_flexibility_part (C5b - C6: moving
+      energy between days, which only the period ceiling can do)
     """
     rows = []
     for split, g in summary.groupby("split", sort=False):
@@ -1255,6 +1291,10 @@ def decomposition(summary: pd.DataFrame) -> pd.DataFrame:
         if BLOCK_ORACLE in c:
             r["block_perfect_battery_value_chf"] = c[PERFECT_NO_BATTERY] - c[BLOCK_ORACLE]
             r["block_rule_cost_chf"] = c[BLOCK_ORACLE] - c[CEILING]
+        if BLOCK_ORACLE in c and HOURLY_DAILY_ORACLE in c:
+            r["hourly_daily_battery_value_chf"] = c[PERFECT_NO_BATTERY] - c[HOURLY_DAILY_ORACLE]
+            r["finer_dispatch_part_chf"] = c[BLOCK_ORACLE] - c[HOURLY_DAILY_ORACLE]
+            r["interday_flexibility_part_chf"] = c[HOURLY_DAILY_ORACLE] - c[CEILING]
         rows.append(r)
     return pd.DataFrame(rows)
 
@@ -1325,8 +1365,35 @@ def _period(split: str) -> tuple[str, str]:
             "rolling": (p["rolling_start"], p["train_end"])}[split]
 
 
+def check_ml_coverage(dates, fc: pd.DataFrame | None = None) -> None:
+    """With ``--require-ml``: every delivery date must have input data and six finite ML
+    predictions (``pred_best``) per target. Otherwise raise an error naming the first bad
+    date and target, so a missing day can never silently shorten an evaluation period."""
+    fc = load_forecasts(True) if fc is None else fc
+    by_day = {d: g for d, g in fc.groupby("delivery_date")}
+    data = load_data()
+    for d in dates:
+        d = _as_date(d)
+        if d not in data["blocks"] or d not in data["hours"]:
+            raise ValueError(f"--require-ml: no input data (blocks/hours) for delivery date {d}")
+        g = by_day.get(d)
+        for target, col in [("demand", "demand_ml_mw"), ("price", "price_ml_eur_mwh")]:
+            n = 0 if g is None else int(np.isfinite(g[col].to_numpy(float)).sum())
+            rows = 0 if g is None else len(g)
+            if rows != 6 or n != 6:
+                raise ValueError(f"--require-ml: delivery date {d} has {n} finite {target} predictions in {rows} "
+                                 f"block rows (6 needed); check reports/predictions_{target}.parquet")
+
+
+def _calendar_days(start, end) -> list[dt.date]:
+    return list(pd.date_range(_as_date(start), _as_date(end), freq="D").date)
+
+
 def _ml_dates(dates, require_ml) -> list:
-    """Dates that have a forecast for every source that is used (ML where a file exists)."""
+    """Dates that have a forecast for every source that is used (ML where a file exists).
+    With ``require_ml`` a missing day is an error (``check_ml_coverage``), not dropped."""
+    if require_ml:
+        check_ml_coverage(dates)
     fc = load_forecasts(require_ml)
     ok = set(fc.loc[(fc["demand_source"] != "missing") & (fc["price_source"] != "missing"), "delivery_date"])
     return [d for d in dates if d in ok]
@@ -1361,6 +1428,8 @@ def main(argv=None) -> None:
         start, end = _period(args.split) if args.split else (args.start, args.end)
         start, end = args.start or start, args.end or end
         dec = tuned_decision()
+        if args.require_ml:
+            check_ml_coverage(_calendar_days(start, end))
         daily, summary = run_backtest(start, end, decision=dec, require_ml=args.require_ml, workers=None)
         stem = f"backtest_{start}_{end}"
         daily.to_csv(REPORTS / f"{stem}.csv", index=False)
@@ -1372,6 +1441,11 @@ def main(argv=None) -> None:
 
     # --- 1. tune the decision rules on data before October -----------------------
     per = tuning_periods()
+    if args.require_ml:  # every calendar day of every period, before tuning or settlement
+        p_ = _periods_cfg()
+        for a, b in [(p_["rolling_start"], p_["train_end"]), (p_["val_start"], tuning_cutoff()),
+                     _period("val"), _period("test")]:
+            check_ml_coverage(_calendar_days(a, b))
     per = {k: _ml_dates(v, args.require_ml) for k, v in per.items()}
     print(f"Tuning decision rules on rolling ({len(per['rolling'])} days) + September up to "
           f"{tuning_cutoff()} ({len(per['september'])} days) ...")
@@ -1412,6 +1486,8 @@ def main(argv=None) -> None:
     pd.concat(hourly_l, ignore_index=True).to_parquet(REPORTS / "backtest_hourly_test.parquet", index=False)
     exc = an.day_exceptions(daily, summary)
     exc.to_csv(REPORTS / "backtest_exceptions.csv", index=False)
+    ci_tab = an.ci_sensitivity(daily, summary)
+    ci_tab.to_csv(REPORTS / "backtest_ci_sensitivity.csv", index=False)
     print(f"  main backtest done ({time.time() - t0:.0f} s)")
 
     an.fig_cumulative(daily[daily["split"] == "test"], FIGURES / "backtest_cumulative_savings_test.png", tag)
@@ -1424,7 +1500,7 @@ def main(argv=None) -> None:
         sens = an.run_sensitivities(splits["test"], dec, args.require_ml, tag)
         print(f"  sensitivities done ({time.time() - t0:.0f} s)")
 
-    an.write_notes(REPORTS / "backtest_notes.md", sources, summary, decomp, exc, tab, dec, kept, sens)
+    an.write_notes(REPORTS / "backtest_notes.md", sources, summary, decomp, exc, tab, dec, kept, sens, ci_tab)
     cols = ["split", "strategy", "total_cost_chf", "saving_vs_baseline_chf", "saving_vs_baseline_adj_chf",
             "saving_adj_ci_low_chf", "saving_adj_ci_high_chf", "pct_perfect_captured", "battery_value_adj_chf",
             "pct_battery_value_captured", "imbalance_penalty_chf", "cycles", "days_battery_idle", "share_charge_cleared"]

@@ -792,22 +792,23 @@ NOTES_WORST = """**What happened (after-the-fact look at the data, incl. the Ger
    on day D: 329, naive: 246); a block price of 451 EUR is far above anything since 2023 (the 2024 – Sep 2026
    maximum was 282 EUR), so the trees had no similar case to learn from. The 10–90 % band (270–364) missed it too.
 2. **Sat 10 Oct, 12–16 (−46).** The model expected the usual sunny-weekend midday dip (139). Germany did crash to
-   ≈ 0 EUR (windy and sunny), but Switzerland stayed at 185 – CH decoupled from DE (most likely the
-   interconnectors were full; we have no capacity data). The naive forecast (60) was even worse.
+   ≈ 0 EUR (windy and sunny), but Switzerland stayed at 185 – Swiss and German prices diverged (full
+   interconnectors would be one explanation, but that is a guess: we have no capacity data). The naive forecast (60) was even worse.
 3. **Wed 28 Oct, 16–20 (−43)** and **Wed 28 Oct, 12–16 (−30).** The start of the same cold, low-wind spell:
    the whole day rose by ≈ 30 EUR vs day D and the evening ramp was steeper than ever before.
 4. **Thu 1 Oct, 08–12 / 12–16 / 16–20 (−29 to −35).** First day of the test month: the day-mean price rose by
    ≈ 21 EUR vs 30 Sep (180 → 201) without a matching move in gas; a model that learns changes vs day D
    under-shoots such sudden level jumps.
 5. **Thu 8 Oct, 12–16 (−33).** Windy in Germany (German price ≈ 107), the model expected a midday dip; Switzerland
-   stayed at ≈ 214 – again CH decoupled from DE.
+   stayed at ≈ 214 – again Swiss and German prices diverged.
 6. **Sun 11 Oct, 12–16 (+31, the only "too high" miss in the top 6).** A real sunny-Sunday solar dip (89 EUR;
    Germany 34). The model went down from 185 on Saturday to 120, but not far enough.
 7. **Mon 26 Oct, 08–12 (+29).** Windy Monday morning after the autumn clock change (German price ≈ 99); the
    model expected a normal Monday morning ramp.
 
 **Pattern:** 8 of the 10 worst blocks are forecasts that were *too low*, all in the day-time and evening blocks
-(08–20) of a month in which prices rose by ≈ 30 % (gas TTF from ≈ 72 to ≈ 97 EUR/MWh). The model is anchored on day D, so it
+(08–20) of a month in which prices rose by ≈ 30 % (gas TTF from ≈ 72 EUR/MWh on 30 Sep to ≈ 97 EUR/MWh on 26 Oct; first and last October closes 73.94
+and 103.94). The model is anchored on day D, so it
 follows a trend with a lag of about one day; the mean October bias is −6.5 EUR/MWh. The two "too high" misses are
 weekend/Monday blocks with much more wind or sun than usual. There were no negative prices in October 2026.
 """

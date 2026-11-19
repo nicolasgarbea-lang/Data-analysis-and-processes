@@ -16,9 +16,10 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from src.backtest.run_backtest import (  # noqa: E402
-    BASELINE, BLOCK_ORACLE, CEILING, FIGURES, LABELS, NO_BATTERY_PAIR, PERFECT_NO_BATTERY, PRODUCT,
+    BASELINE, BLOCK_ORACLE, CEILING, FIGURES, HOURLY_DAILY_ORACLE, LABELS, NO_BATTERY_PAIR, PERFECT_NO_BATTERY, PRODUCT,
     PRODUCT_DEFAULT, REPORTS, STRATEGIES, DecisionParams, ImbalanceParams, _as_date, _periods_cfg,
-    inventory_value_chf, load_data, load_forecasts, paired_bootstrap_ci, run_tasks, source_text,
+    block_bootstrap_index, bootstrap_sums, inventory_value_chf, lag1_autocorr, load_data, load_forecasts,
+    paired_bootstrap_ci, run_tasks, source_text,
     tuning_cutoff,
 )
 from src.config import load_config  # noqa: E402
@@ -32,10 +33,14 @@ COLORS = {
     "ml_battery": "#2a78d6",
     "ml_battery_block_default": "#7fb0e8",
     "perfect_foresight_battery": "#6250d6",
+    "perfect_foresight_hourly_daily_battery": "#b07fd6",
     "perfect_foresight_hourly_battery": "#e87ba4",
     "perfect_demand_no_battery": "#eda100",
 }
 INK, MUTED, GRID = "#222222", "#6b6b66", "#e4e3df"
+# The figures keep the original eight strategies; 5b (hourly oracle with daily reset) is a
+# diagnostic row in the tables and the decomposition only.
+FIG_STRATEGIES = [s for s in STRATEGIES if s != HOURLY_DAILY_ORACLE]
 
 
 def _style(ax, title=None, xlabel=None, ylabel=None):
@@ -357,6 +362,46 @@ def run_sensitivities(test_dates, dec, require_ml, tag) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# How wide is the interval really? (day-to-day correlation of the savings)
+# ---------------------------------------------------------------------------
+CI_BLOCK_DAYS = 7
+
+
+def ci_sensitivity(daily: pd.DataFrame, summary: pd.DataFrame, strategy: str = PRODUCT,
+                   block_len: int = CI_BLOCK_DAYS, n_boot: int = 1000, seed: int | None = None) -> pd.DataFrame:
+    """95 % interval of the product's inventory-adjusted saving vs the baseline per split,
+    twice: with independent days (as in ``backtest_summary.csv``) and with a circular
+    ``block_len``-day block bootstrap that keeps runs of consecutive days together. Also
+    reports the lag-1 autocorrelation of the daily savings (if it is clearly above zero,
+    the independent-day interval is too narrow)."""
+    seed = load_config().get("random_seed", 42) if seed is None else seed
+    rows = []
+    for split, g in daily.groupby("split", sort=False):
+        piv = g.pivot_table(index="delivery_date", columns="strategy", values="total_cost_chf").sort_index()
+        if BASELINE not in piv or strategy not in piv:
+            continue
+        ok = piv[BASELINE].notna() & piv[strategy].notna()
+        sav = (piv.loc[ok, BASELINE] - piv.loc[ok, strategy]).to_numpy()
+        srow = summary[(summary["split"] == split) & (summary["strategy"] == strategy)].iloc[0]
+        brow = summary[(summary["split"] == split) & (summary["strategy"] == BASELINE)].iloc[0]
+        shift = float(srow["inventory_value_chf"] - brow["inventory_value_chf"])
+        idx = block_bootstrap_index(len(sav), block_len, n_boot, seed)
+        draws = bootstrap_sums(sav, idx) + shift
+        rows.append({
+            "split": split, "strategy": strategy, "days": int(len(sav)),
+            "saving_vs_baseline_adj_chf": float(srow["saving_vs_baseline_adj_chf"]),
+            "lag1_autocorr_daily_saving": lag1_autocorr(sav),
+            "ci_independent_days_low_chf": float(srow["saving_adj_ci_low_chf"]),
+            "ci_independent_days_high_chf": float(srow["saving_adj_ci_high_chf"]),
+            "block_length_days": int(block_len),
+            "ci_block_low_chf": float(np.percentile(draws, 2.5)),
+            "ci_block_high_chf": float(np.percentile(draws, 97.5)),
+            "n_boot": int(n_boot), "seed": int(seed),
+        })
+    return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
 # Plausibility checks ("numbers add up")
 # ---------------------------------------------------------------------------
 EXC_COLS = ["split", "delivery_date", "check", "excess_chf", "demand_part_chf", "battery_part_chf", "reason"]
@@ -430,7 +475,7 @@ def fig_cumulative(daily: pd.DataFrame, path, title_suffix=""):
     piv = daily.pivot_table(index="delivery_date", columns="strategy", values="total_cost_chf")
     sav = piv.sub(piv[BASELINE], axis=0).mul(-1).cumsum() / 1000
     fig, ax = plt.subplots(figsize=(9.5, 5.2))
-    for s in [k for k in STRATEGIES if k != BASELINE and k in sav]:
+    for s in [k for k in FIG_STRATEGIES if k != BASELINE and k in sav]:
         lw = 2.6 if s == PRODUCT else 1.5
         ls = "--" if s == PRODUCT_DEFAULT else "-"
         ax.plot(pd.to_datetime(sav.index.astype(str)), sav[s], color=COLORS[s], lw=lw, ls=ls, label=LABELS[s])
@@ -451,7 +496,7 @@ def fig_cost_breakdown(summary: pd.DataFrame, path, split="test", title_suffix="
     end-of-period inventory adjustment (inventory-adjusted totals)."""
     g = summary[summary["split"] == split].set_index("strategy")
     ref = g.loc[PERFECT_NO_BATTERY]
-    order = [s for s in STRATEGIES if s in g.index]
+    order = [s for s in FIG_STRATEGIES if s in g.index]
     pen = g.loc[order, "imbalance_penalty_chf"] / 1000
     wear = g.loc[order, "wear_cost_chf"] / 1000
     inv = -g.loc[order, "inventory_value_chf"] / 1000
@@ -623,7 +668,8 @@ def _tuning_md(tab: pd.DataFrame) -> str:
                                       "vs_reference_ci_low_chf": "CI low", "vs_reference_ci_high_chf": "CI high"}))
 
 
-def write_notes(path, sources, summary, decomp, exceptions, tuning_tab, chosen, kept_default, sens=None):
+def write_notes(path, sources, summary, decomp, exceptions, tuning_tab, chosen, kept_default, sens=None,
+                ci_tab=None):
     sens = sens or {}
     bat = BatteryParams.from_config()
     imb = ImbalanceParams.from_config()
@@ -656,7 +702,10 @@ def write_notes(path, sources, summary, decomp, exceptions, tuning_tab, chosen, 
           "strategy that follows the same battery rules can be cheaper over the period. **(5)** is perfect foresight "
           "with the same 4-hour block rules as the product (uniform dispatch inside a block, back to the start level "
           "every evening); it is NOT a ceiling.",
-          "- CI = 95 % paired day-bootstrap interval (1000 draws) of the saving vs strategy 1.", ""]
+          "- **(5b)** is hourly perfect foresight planned day by day with the same end-of-day target as (5). "
+          "It splits the gap between (5) and (6) into finer dispatch (5 -> 5b) and inter-day flexibility (5b -> 6).",
+          "- CI = 95 % paired day-bootstrap interval (1000 draws) of the saving vs strategy 1. It treats the days as "
+          "independent; see the block-bootstrap interval below for a wider, more honest one.", ""]
     titles = [("test", "Test month (October 2026)"), ("val", "Validation month (September 2026)"),
               ("rolling", f"Rolling period ({_periods_cfg()['rolling_start']} to {_periods_cfg()['train_end']})")]
     for split, title in titles:
@@ -680,9 +729,25 @@ def write_notes(path, sources, summary, decomp, exceptions, tuning_tab, chosen, 
                   f"- Cost of demand-forecast errors (vs perfect demand, no battery): naive CHF "
                   f"{r.forecast_error_cost_naive_chf:,.0f}, ML CHF {r.forecast_error_cost_ml_chf:,.0f}."]
             if "block_rule_cost_chf" in r:
-                L += [f"- The 4-hour block rules cost CHF {r.block_rule_cost_chf:,.0f} of battery value even with perfect "
-                      f"foresight (5 vs 6; block-rule battery value CHF {r.block_perfect_battery_value_chf:,.0f})."]
+                L += [f"- Perfect foresight with 4-hour block rules (5) is CHF {r.block_rule_cost_chf:,.0f} short of the "
+                      f"ceiling (6) (block-rule battery value CHF {r.block_perfect_battery_value_chf:,.0f})."]
+            if "finer_dispatch_part_chf" in r and pd.notna(r.finer_dispatch_part_chf):
+                L += [f"  - of this, CHF {r.finer_dispatch_part_chf:,.0f} is finer dispatch (5 -> 5b: hourly instead of "
+                      f"4-hour blocks, still back to the start level every evening; battery value 5b CHF "
+                      f"{r.hourly_daily_battery_value_chf:,.0f}) and CHF {r.interday_flexibility_part_chf:,.0f} is "
+                      "inter-day flexibility (5b -> 6: moving energy between days, which the daily plans never do)."]
             L += [""]
+    if ci_tab is not None and len(ci_tab):
+        L += ["## How wide is the interval with correlated days?", "",
+              f"Daily savings are correlated from one day to the next. The table compares the independent-day "
+              f"interval with a circular {int(ci_tab['block_length_days'].iloc[0])}-day block bootstrap "
+              "(`reports/backtest_ci_sensitivity.csv`, product (4) vs baseline (1), inventory-adjusted).", "",
+              md_table(ci_tab[["split", "days", "saving_vs_baseline_adj_chf", "lag1_autocorr_daily_saving",
+                               "ci_independent_days_low_chf", "ci_independent_days_high_chf", "ci_block_low_chf",
+                               "ci_block_high_chf"]].rename(columns={
+                  "saving_vs_baseline_adj_chf": "saving", "lag1_autocorr_daily_saving": "lag-1 autocorr.",
+                  "ci_independent_days_low_chf": "CI low (indep.)", "ci_independent_days_high_chf": "CI high (indep.)",
+                  "ci_block_low_chf": "CI low (block)", "ci_block_high_chf": "CI high (block)"}), floatfmt=",.2f"), ""]
     if (summary["split"] == "val").any():
         L += ["Note: the decision rules were tuned on the rolling period plus September 1-29, so the September and "
               "rolling numbers are in-sample for those rules (the forecasts themselves are out-of-sample). Only "
