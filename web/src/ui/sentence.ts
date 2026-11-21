@@ -1,8 +1,13 @@
-import type { DayPlan } from "../data/types";
 import { int, listAnd } from "../lib/format";
 
+/** Only what the sentence reads, so a replayed day (DayPlan) and a live plan (LivePlan) both fit. */
+export interface SentencePlan {
+  blocks: { label: string; charge_mwh: number; discharge_mwh: number }[];
+  summary: { energy_to_buy_mwh: number };
+}
+
 /** The plan in one sentence, e.g. "Store 36 MWh at 12–16 and 20–24. Use it at 08–12 and 16–20." */
-export function planSentence(plan: DayPlan): string {
+export function planSentence(plan: SentencePlan): string {
   const store = plan.blocks.filter((b) => b.charge_mwh > 0.5);
   const use = plan.blocks.filter((b) => b.discharge_mwh > 0.5);
   const buy = `Buy ${int(plan.summary.energy_to_buy_mwh)} MWh.`;

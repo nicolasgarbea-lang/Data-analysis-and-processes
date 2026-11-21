@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "api": "cd .. && .venv/bin/python -m uvicorn api.server:app --port 8000",
-    "start": "bun run scripts/start.ts",
+    "api": "node scripts/api.mjs",
+    "start": "node scripts/start.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"

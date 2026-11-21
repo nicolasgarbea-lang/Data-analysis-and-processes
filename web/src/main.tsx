@@ -9,6 +9,7 @@ import { Tomorrow } from "./routes/Tomorrow";
 import { Battery } from "./routes/Battery";
 import { Results } from "./routes/Results";
 import { MethodPage } from "./routes/Method";
+import { Live } from "./routes/Live";
 
 type DaySearch = { date?: string };
 const daySearch = (s: Record<string, unknown>): DaySearch => (typeof s.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? { date: s.date } : {});
@@ -22,6 +23,9 @@ function Shell() {
           {meta.data?.company ?? "Limmat Energie AG"}
         </Link>
         <nav aria-label="Sections">
+          <Link to="/live" activeProps={{ "aria-current": "page" }}>
+            Plan live
+          </Link>
           <Link to="/" activeOptions={{ exact: true, includeSearch: false }} activeProps={{ "aria-current": "page" }}>
             Tomorrow
           </Link>
@@ -59,9 +63,10 @@ const tomorrowRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", 
 const batteryRoute = createRoute({ getParentRoute: () => rootRoute, path: "/battery", component: Battery, validateSearch: daySearch });
 const resultsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/results", component: Results });
 const methodRoute = createRoute({ getParentRoute: () => rootRoute, path: "/how", component: MethodPage });
+const liveRoute = createRoute({ getParentRoute: () => rootRoute, path: "/live", component: Live });
 
 const router = createRouter({
-  routeTree: rootRoute.addChildren([tomorrowRoute, resultsRoute, batteryRoute, methodRoute]),
+  routeTree: rootRoute.addChildren([liveRoute, tomorrowRoute, resultsRoute, batteryRoute, methodRoute]),
   history: createHashHistory(), // works from any static file host
   scrollRestoration: true,
 });

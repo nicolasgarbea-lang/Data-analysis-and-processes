@@ -233,3 +233,104 @@ export interface MonthResult {
   ceiling_battery_value_chf: number;
   cycles: number;
 }
+
+// "Plan live" tab (api/server.py, /api/live/*): tomorrow planned from data known today.
+export interface LiveSource {
+  source: string;
+  label: string;
+  last_timestamp_utc: string | null;
+  ok: boolean;
+  message: string;
+}
+
+export interface LiveOverrides {
+  temp_shift_c: number;
+  is_holiday: boolean | null; // null = follow the calendar
+  gas_eur_mwh: number | null; // null = use the latest stored gas price
+  demand_scale_pct: number;
+}
+
+export interface LivePlan {
+  made_at_utc: string;
+  delivery_date: string;
+  issue_time_local: string; // "2026-11-21 10:00"
+  weekday: string;
+  is_holiday: boolean;
+  holiday_name: string | null;
+  event_name: string | null;
+  battery: BatterySettings;
+  soc_start_mwh: number;
+  blocks: {
+    block: number;
+    label: string;
+    hours: number;
+    demand_fc_mw: number;
+    demand_q10_mw: number | null;
+    demand_q90_mw: number | null;
+    demand_naive_mw: number | null;
+    price_fc: number;
+    price_q10: number | null;
+    price_q90: number | null;
+    price_naive: number | null;
+    buy_mwh: number;
+    charge_mwh: number;
+    discharge_mwh: number;
+    sell_mwh: number;
+    soc_end_mwh: number;
+    option: string;
+    charge_limit_eur_mwh: number | null;
+  }[];
+  hours: {
+    utc: string;
+    hour: string;
+    block: number;
+    demand_fc_mw: number;
+    price_fc: number | null;
+    demand_bid_mwh: number;
+    charge_bid_mwh: number;
+    charge_limit_eur_mwh: number | null;
+    planned_discharge_mwh: number;
+    soc_mwh: number | null;
+  }[];
+  bids: { hour: string; utc: string; block: number; bid_type: string; volume_mwh: number; limit_price_eur_mwh: number | null }[];
+  summary: {
+    energy_to_buy_mwh: number;
+    charged_mwh: number;
+    discharged_mwh: number;
+    expected_cost_chf: number;
+    expected_battery_saving_chf: number;
+    eurchf: number;
+  };
+  inputs: {
+    key: string;
+    label: string;
+    unit: string;
+    values: (number | null)[]; // per block, or 1 value
+    status: "ok" | "estimated" | "stale" | "missing";
+    source: string;
+    as_of: string | null;
+  }[];
+  recent: { date: string; demand_mw: (number | null)[]; price: (number | null)[] }[]; // last 7 days, 6 blocks
+  sources: LiveSource[];
+  overrides: LiveOverrides;
+  warnings: string[];
+}
+
+export interface LiveStatus {
+  fetched_at_utc: string | null;
+  delivery_date: string;
+  sources: (LiveSource & { rows_added?: number })[];
+}
+
+export interface LiveLogEntry {
+  delivery_date: string;
+  made_at_utc: string;
+  blocks: { label: string; demand_fc_mw: number; price_fc: number; demand_actual_mw: number | null; price_actual: number | null }[];
+  summary: { energy_to_buy_mwh: number; expected_cost_chf: number };
+}
+
+export interface LivePlanRequest {
+  battery: BatterySettings;
+  soc_start_mwh?: number;
+  overrides?: Partial<LiveOverrides>;
+}

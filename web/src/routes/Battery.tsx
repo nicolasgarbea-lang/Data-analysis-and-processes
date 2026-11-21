@@ -7,6 +7,7 @@ import { DayRail, RailLegend } from "../charts/DayRail";
 import { Fold } from "../ui/Blocks";
 import { DayPicker, defaultDate } from "../ui/DayPicker";
 import { planSentence } from "../ui/sentence";
+import { StartCommands } from "../ui/StartService";
 import { chf, dec1, int, pct } from "../lib/format";
 
 const route = getRouteApi("/battery");
@@ -232,7 +233,7 @@ function Offline({ checking }: { checking: boolean }) {
         <strong>The planning service is not running.</strong> Changing the battery needs the optimiser, which runs in Python. Start it in the project folder, and
         this page connects by itself:
       </p>
-      <code>.venv/bin/python -m uvicorn api.server:app --port 8000</code>
+      <StartCommands />
     </div>
   );
 }
