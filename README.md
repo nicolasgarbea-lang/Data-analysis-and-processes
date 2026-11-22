@@ -24,6 +24,10 @@ battery (CHF 181,033 from the better demand forecast, CHF 45,466 from the batter
 > than the battery under real settlement. The 95 % interval is CHF 129,685 to 354,460 when runs of 7 days are kept
 > together (158,868 to 306,077 if the days were independent).
 
+**Research question:** how much can a DSO save by combining a demand forecast and a price forecast with a
+storage-constrained bidding optimisation, compared with naive planning? Known weak points in plain words: one-pager
+(`day_ahead_planning.md`, after section 6) and report §8.
+
 - One-pager: [`day_ahead_planning.md`](day_ahead_planning.md)
 - Full report: [`reports/report.md`](reports/report.md) · slide outline: [`reports/slide_outline.md`](reports/slide_outline.md)
 
@@ -137,6 +141,44 @@ Report tables (check that every table in the report matches the result files):
 | Downloads (`--data`) | not timed; the APIs are called with pauses to respect rate limits (Energy-Charts, Open-Meteo), so allow well over an hour on a first run |
 | Features, backtest | not timed in the result files; the backtest prints its own duration |
 | App start | a few seconds; planning one day takes well under a second |
+
+## Plan live (tomorrow from today's data)
+
+The **Plan live** page of the web app does the real daily job: on day D it downloads the data known today, builds
+tomorrow's inputs with the same feature code, forecasts demand and price with the saved models, plans the battery
+with the same tuned rules as the backtest and shows the hourly auction bids (CSV download). Small "what if" inputs
+(temperature shift, holiday, gas price, demand correction, battery level) re-plan in a few seconds. Plans made
+without what-ifs are kept in `data/live/log/` and compared with the real values once they are published (track
+record).
+
+Run it (Windows; on macOS/Linux use `.venv/bin/python`):
+
+```bash
+.venv\Scripts\python -m src.live.refresh                 # optional: download today's data now (about 2 minutes)
+.venv\Scripts\python -m uvicorn api.server:app --port 8000
+cd web && npm install && npm run dev                      # second terminal, open http://localhost:5173/#/live
+```
+
+The page has a **Get today's data** button, so the first command is optional. Downloads and caches go to
+`data/live/` (not committed); `data/processed/` is never changed.
+
+Code: `src/live/refresh.py` (downloads the last ~3 weeks from every source with the project's own loaders and
+appends them to the stored tables), `src/live/plan.py` (gap filling, what-ifs, forecasts, plan), endpoints
+`/api/live/*` in `api/server.py`, page `web/src/routes/Live.tsx`. Tests: `tests/test_live_refresh.py`,
+`tests/test_live_plan.py` (on 15 Oct 2026 the live path reproduces the backtest's demand forecast and planner).
+Build prompt: `prompts/live_tab_prompt.md`.
+
+Limits:
+
+- The models are the saved ones, trained on data until the end of September 2026. Retrain them for real use.
+- The public ewz demand file arrives about 1.5 days late. The missing day is estimated with the same hours one week
+  earlier and flagged "estimated" (a real DSO would use its own meters).
+- Inputs that are not published yet at the time of the run (e.g. today's French price before noon, the Swiss load
+  that Energy-Charts has reported wrongly since 16 Nov 2026) are left empty; the page lists them.
+- The stored calendar ends on 31 Dec 2026, and some download addresses and yearly files are named up to 2026, so the
+  refresh needs a small update for 2027.
+- The weather forecast is the one available when you press the button; before about 09:00 some hours may come from
+  an older model run than the backtest used.
 
 ## Before you publish
 

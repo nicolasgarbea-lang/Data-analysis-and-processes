@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { Backtest, BatterySettings, DayPlan, Drivers, Meta, Method, ModelInfo, MonthResult } from "./types";
+import type { Backtest, BatterySettings, DayPlan, Drivers, LiveLogEntry, LivePlan, LivePlanRequest, LiveStatus, Meta, Method, ModelInfo, MonthResult } from "./types";
 
 const DATA = `${import.meta.env.BASE_URL}data`;
 
@@ -61,3 +61,15 @@ export const useCustomPlan = (date: string | undefined, battery: BatterySettings
   });
 
 export const runMonth = (battery: BatterySettings) => postJson<MonthResult>("/api/month", { battery });
+
+// ---- Plan live: tomorrow from today's data (needs the planning service) ----
+export const getLiveStatus = () => getJson<LiveStatus>("/api/live/status");
+/** Downloads today's data. Slow: one to three minutes. */
+export const refreshLive = (force = false) => postJson<LiveStatus>("/api/live/refresh", { force });
+export const planLive = (req: LivePlanRequest) => postJson<LivePlan>("/api/live/plan", req);
+export const getLiveLog = () => getJson<LiveLogEntry[]>("/api/live/log");
+
+export const useLiveStatus = (enabled: boolean) => useQuery({ queryKey: ["live-status"], queryFn: getLiveStatus, enabled, retry: false, staleTime: 60000 });
+export const useLivePlan = (req: LivePlanRequest | null, enabled: boolean) =>
+  useQuery({ queryKey: ["live-plan", req], queryFn: () => planLive(req!), enabled: enabled && !!req, retry: false, staleTime: Infinity, placeholderData: (prev) => prev });
+export const useLiveLog = (enabled: boolean) => useQuery({ queryKey: ["live-log"], queryFn: getLiveLog, enabled, retry: false, staleTime: 60000 });

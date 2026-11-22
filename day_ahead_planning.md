@@ -4,6 +4,10 @@
 
 ![From TSO to DSO to homes](docs/architecture_tso_dso.svg)
 
+**Research question:** How much can a DSO save by combining a demand forecast and a price forecast with a
+storage-constrained bidding optimisation, compared with naive planning? (Two ML models feeding one optimisation with
+battery limits.)
+
 ## 1. The user and the decision
 
 **User:** **Limmat Energie AG**, a *fictional* **DSO** (distribution system operator) that supplies the city of
@@ -103,6 +107,21 @@ flowchart TD
 Swissgrid's real settlement (quarter-hourly, single price since 2026) can even reward a helpful deviation, so this
 does not prove the ranking under real settlement; real imbalance prices are the first next step. Details:
 `reports/report.md`.
+
+**Known weak points, in plain words** (details in `reports/report.md` §7–8):
+
+- **The penalty is assumed.** We fine every wrong MWh by 20 % of the price. Swissgrid settles every 15 minutes, and
+  a deviation does not always cost money, so the real demand saving would be smaller. The method stays the same; only
+  the settlement rule would change.
+- **The battery value is a minimum.** Only one use is counted (shifting the DSO's own purchase). Real batteries also
+  earn from balancing services and peak shaving.
+- **One test month.** 31 days give a rough number (CHF 129,685 to 354,460). The full year was used for tuning, so it
+  is not a fair test.
+- **Price forecast too low in October** (6.5 EUR/MWh on average, because prices rose). The battery needs the order of
+  the hours more than the level, so the damage was small.
+- **Easy baseline.** A plain linear regression already gets much of the gain; the fair comparison is against it.
+- **No plan for being wrong.** The optimisation treats the forecasts as exact.
+- **Hourly shape not forecast.** Inside each 4-hour block the hourly shape is last week's average.
 
 ## 7. Decided questions (were open in v5)
 

@@ -21,10 +21,28 @@ bun run start    # planning service (port 8000) + web app, open http://localhost
 
 or separately: `bun run api` (the Python service) and `bun run dev` (the web app).
 
+### Without Bun (npm only, Windows, macOS, Linux)
+
+Once, in `web/`: `npm install`. Then two terminals, both in `web/`:
+
+```bash
+npm run api    # the planning service on port 8000
+npm run dev    # the web app, open http://localhost:5173
+```
+
+`npm run api` picks `.venv\Scripts\python.exe` on Windows and `.venv/bin/python` elsewhere
+(`scripts/api.mjs`). `npm start` runs both in one terminal. To start the service by hand from the project folder:
+
+```bash
+.venv\Scripts\python -m uvicorn api.server:app --port 8000   # Windows
+.venv/bin/python -m uvicorn api.server:app --port 8000       # macOS / Linux
+```
+
 ## What needs the planning service
 
-Three pages (Tomorrow, Results, How it works) read only the exported JSON files and work without Python. The
-"Try a battery" page changes the battery and plans again, which needs the optimiser: it calls `api/server.py`
+Three pages (Tomorrow, Results, How it works) read only the exported JSON files and work without Python. "Plan
+live" plans tomorrow from today's data (`/api/live/status`, `/api/live/refresh`, `/api/live/plan`, `/api/live/log`)
+and needs the service. The "Try a battery" page changes the battery and plans again, which needs the optimiser: it calls `api/server.py`
 (`POST /api/plan`, `POST /api/month`). If the service is not running the page says so and shows the command.
 
 ## Build a static site
@@ -42,7 +60,7 @@ bun run preview    # serve the build on http://localhost:4173
 |---|---|
 | `src/data/types.ts` | the data contract: every JSON shape the Python exporter writes |
 | `src/data/api.ts` | loading the JSON files and calling the planning service (TanStack Query) |
-| `src/main.tsx` | the frame and the four routes (TanStack Router) |
+| `src/main.tsx` | the frame and the five routes (TanStack Router) |
 | `src/routes/` | one file per page |
 | `src/charts/DayRail.tsx` | the day at a glance: decision, price, battery, charge level, demand on one time axis |
 | `src/charts/Charts.tsx` | line, bar, stacked column and heat-map charts |

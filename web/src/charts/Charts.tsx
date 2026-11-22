@@ -28,6 +28,21 @@ interface LineChartProps {
   marker?: boolean;
 }
 
+/** Index ranges [from, to) where both band edges are known; the band is drawn only there. */
+function bandRuns(band: { lo: (number | null)[]; hi: (number | null)[] }): [number, number][] {
+  const ok = (i: number) => band.lo[i] != null && band.hi[i] != null && isFinite(band.lo[i] as number) && isFinite(band.hi[i] as number);
+  const runs: [number, number][] = [];
+  const n = Math.min(band.lo.length, band.hi.length);
+  for (let i = 0; i < n; i++) {
+    if (!ok(i)) continue;
+    let j = i;
+    while (j < n && ok(j)) j++;
+    runs.push([i, j]);
+    i = j;
+  }
+  return runs;
+}
+
 /** Lines over an ordered x axis, with a crosshair that reads every series at once. */
 export function LineChart({ labels, series, height = 280, yTitle, xTicks, xTickFormat, yFormat = int, band, zero = false, directLabels = true, ariaLabel, marker = false }: LineChartProps) {
   const [ref, width] = useWidth<HTMLDivElement>(700);
@@ -97,20 +112,26 @@ export function LineChart({ labels, series, height = 280, yTitle, xTicks, xTickF
             {xTickFormat ? xTickFormat(labels[i], i) : labels[i]}
           </text>
         ))}
-        {band && (
-          <path
-            d={
-              band.hi.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v ?? 0)}`).join("") +
-              band.lo
-                .map((v, i) => [i, v] as const)
-                .reverse()
-                .map(([i, v]) => `L${x(i)},${y(v ?? 0)}`)
-                .join("") +
-              "Z"
-            }
-            fill={band.color}
-          />
-        )}
+        {band &&
+          bandRuns(band).map(([from, to]) => (
+            <path
+              key={from}
+              d={
+                band.hi
+                  .slice(from, to)
+                  .map((v, k) => `${k ? "L" : "M"}${x(from + k)},${y(v as number)}`)
+                  .join("") +
+                band.lo
+                  .slice(from, to)
+                  .map((v, k) => [from + k, v as number] as const)
+                  .reverse()
+                  .map(([i, v]) => `L${x(i)},${y(v)}`)
+                  .join("") +
+                "Z"
+              }
+              fill={band.color}
+            />
+          ))}
         {series.map((s) => (
           <g key={s.key}>
             <path d={path(s.values) ?? ""} fill="none" stroke={s.color} strokeWidth={s.width ?? 2} strokeDasharray={s.dash} strokeLinejoin="round" strokeLinecap="round" />

@@ -1,0 +1,204 @@
+/* "Plan live" page. Only classes used by routes/Live.tsx; shared styles stay in styles.css. */
+
+.live-made {
+  color: var(--ink-3);
+  font-size: var(--step-0);
+  margin-top: 0.35rem;
+}
+
+.live-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1.25rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex: 1 1 24rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+  font-size: var(--step--1);
+  white-space: nowrap;
+  cursor: help;
+}
+
+.chip small {
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+  align-self: center;
+}
+
+.chip.good,
+.badge.good {
+  color: var(--saving);
+}
+.chip.warn,
+.badge.warn {
+  color: var(--use);
+}
+.chip.bad,
+.badge.bad {
+  color: var(--penalty);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: var(--step--1);
+  white-space: nowrap;
+}
+
+.live-progress {
+  flex-basis: 100%;
+  color: var(--ink-2);
+  font-size: var(--step--1);
+}
+
+.live-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.15rem 2rem;
+  margin-top: 1rem;
+  max-width: 66rem;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.field input[type="number"] {
+  width: 100%;
+  max-width: 12rem;
+  padding: 0.35rem 0.5rem;
+  border: 1.5px solid var(--ink-3);
+  border-radius: 4px;
+  background: var(--surface);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.field small {
+  color: var(--ink-3);
+  font-size: var(--step--1);
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.linklike {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ink-2);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--step--1);
+}
+
+.block-cards {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 2rem;
+}
+
+@media (max-width: 66rem) {
+  .block-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 36rem) {
+  .block-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.block-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-top: 4px solid var(--ink-3);
+  border-radius: 6px;
+  padding: 0.7rem 0.8rem;
+  font-size: var(--step--1);
+  display: grid;
+  gap: 0.2rem;
+  align-content: start;
+}
+
+.block-card.store {
+  border-top-color: var(--charge);
+  background: color-mix(in oklab, var(--charge-tint) 55%, var(--surface));
+}
+
+.block-card.use {
+  border-top-color: var(--use);
+  background: color-mix(in oklab, var(--use-tint) 55%, var(--surface));
+}
+
+.block-card h3 {
+  margin: 0;
+  font-size: var(--step-0);
+  font-variant-numeric: tabular-nums;
+}
+
+.block-card .word {
+  font-weight: 650;
+  font-size: var(--step-1);
+  margin-bottom: 0.25rem;
+}
+
+.block-card .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.block-card .row span:first-child {
+  color: var(--ink-2);
+}
+
+.block-card .range {
+  color: var(--ink-3);
+  text-align: right;
+}
+
+.live-warnings {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1rem 0.75rem 2rem;
+  border-left: 4px solid var(--use);
+  background: var(--use-tint);
+  border-radius: 0 6px 6px 0;
+  max-width: 66rem;
+}
+
+.live-warnings li + li {
+  margin-top: 0.25rem;
+}

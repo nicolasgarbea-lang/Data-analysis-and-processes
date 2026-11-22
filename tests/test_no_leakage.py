@@ -143,6 +143,14 @@ def poison(tables: dict, delivery: pd.Timestamp, issue: pd.Timestamp) -> dict:
 
 
 # ---------------------------------------------------------------- comparison
+def _close(a, b) -> bool:
+    """Equal up to floating-point rounding (sin/cos/daylight differ in the last digit across platforms)."""
+    try:
+        return bool(np.isclose(float(a), float(b), rtol=1e-12, atol=1e-12))
+    except (TypeError, ValueError):
+        return False
+
+
 def compare_row(stored_row: pd.Series, rebuilt_row: pd.Series) -> list[str]:
     """Names of features where the rebuilt value differs from the stored one."""
     bad = []
@@ -157,7 +165,7 @@ def compare_row(stored_row: pd.Series, rebuilt_row: pd.Series) -> list[str]:
             expected = stored_row[fc_col] if pd.notna(stored_row[fc_col]) else stored_row[fs.ORACLE_WEATHER_MAP[col]]
         else:
             expected = rebuilt_row[col]
-        if not ((pd.isna(a) and pd.isna(expected)) or a == expected):
+        if not ((pd.isna(a) and pd.isna(expected)) or a == expected or _close(a, expected)):
             bad.append(f"{col}: stored={a} rebuilt={expected}")
     return bad
 
@@ -174,7 +182,7 @@ def _check(sample, stored, tables, transform):
         rebuilt = rebuilt.set_index(["delivery_date", "block"])
         for b in blocks:
             bad = compare_row(stored.loc[(d, b)], rebuilt.loc[(d, b)])
-            problems += [f"{d.date()} block {b}: {x}" for x in bad]
+            problems += [f"{pd.Timestamp(d).date()} block {b}: {x}" for x in bad]
     return problems
 
 

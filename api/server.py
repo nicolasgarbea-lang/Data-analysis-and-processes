@@ -163,3 +163,101 @@ def plan(req: PlanRequest) -> JSONResponse:
 @app.post("/api/month")
 def month(req: MonthRequest) -> JSONResponse:
     return JSONResponse(_month_cached(_key(req.battery.settings())))
+
+
+# ---------------------------------------------------------------------------
+# Plan live: tomorrow from today's data (src/live/refresh.py + src/live/plan.py)
+# ---------------------------------------------------------------------------
+class LiveOverrides(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    temp_shift_c: float = Field(default=0.0, ge=-15, le=15)
+    is_holiday: bool | None = None
+    gas_eur_mwh: float | None = Field(default=None, ge=0, le=1000)
+    demand_scale_pct: float = Field(default=0.0, ge=-50, le=50)
+
+
+class LivePlanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    battery: BatterySettings | None = None
+    soc_start_mwh: float | None = Field(default=None, ge=0)
+    overrides: LiveOverrides | None = None
+
+
+class LiveRefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    force: bool = False
+
+
+def _live_status(status: list | None, fetched_at: str | None) -> dict:
+    from src.live import plan as lp
+    return {"fetched_at_utc": fetched_at, "delivery_date": str(lp.tomorrow_local()), "sources": status or []}
+
+
+def _live_tables(refresh_if_missing: bool):
+    """(tables, status list, fetched_at) from today's cache; refresh first if there is none."""
+    from src.live import refresh as lr
+    cached = lr.load_cached_tables()
+    if cached is None:
+        if not refresh_if_missing:
+            return None, [], None
+        cached = lr.refresh_tables()
+    tables, status = cached
+    return tables, status, _fetched_at(status)
+
+
+def _fetched_at(status) -> str | None:
+    from src.live import refresh as lr
+    f = getattr(lr, "fetched_at", None)
+    if callable(f):
+        try:
+            return f()
+        except Exception:  # noqa: BLE001 - optional helper
+            return None
+    for s in status or []:
+        if isinstance(s, dict) and s.get("fetched_at_utc"):
+            return s["fetched_at_utc"]
+    return None
+
+
+@app.get("/api/live/status")
+def live_status() -> JSONResponse:
+    _, status, fetched = _live_tables(refresh_if_missing=False)
+    return JSONResponse(_live_status(status, fetched))
+
+
+@app.post("/api/live/refresh")
+def live_refresh(req: LiveRefreshRequest | None = None) -> JSONResponse:
+    from src.live import refresh as lr
+    _, status = lr.refresh_tables(force=bool(req and req.force))
+    return JSONResponse(_live_status(status, _fetched_at(status)))
+
+
+@app.post("/api/live/plan")
+def live_plan(req: LivePlanRequest | None = None) -> JSONResponse:
+    from src.live import plan as lp
+    req = req or LivePlanRequest()
+    tables, status, _ = _live_tables(refresh_if_missing=True)
+    battery = req.battery.settings() if req.battery else None
+    overrides = req.overrides.model_dump() if req.overrides else None
+    if battery is not None and req.soc_start_mwh is not None:
+        cap = battery["capacity_mwh"]
+        if req.soc_start_mwh > cap:
+            raise InputError(f"soc_start_mwh: must be at most the capacity ({cap:g} MWh)")
+    try:
+        plan = lp.live_plan(tables, battery=battery, soc_start_mwh=req.soc_start_mwh,
+                            overrides=overrides, sources=status)
+    except (ValueError, KeyError) as e:
+        raise InputError(f"live plan failed: {e}") from e
+    if lp.is_default(overrides, req.soc_start_mwh, battery):
+        lp.save_log(plan)
+    return JSONResponse(plan)
+
+
+@app.get("/api/live/log")
+def live_log() -> JSONResponse:
+    from src.live import plan as lp
+    tables, _, _ = _live_tables(refresh_if_missing=False)
+    return JSONResponse(lp.read_log(tables))
