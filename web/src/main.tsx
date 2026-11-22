@@ -24,24 +24,29 @@ function Shell() {
         </Link>
         <nav aria-label="Sections">
           <Link to="/live" activeProps={{ "aria-current": "page" }}>
-            Plan live
+            1 · Plan tomorrow
+            <small>the real tool, today’s data</small>
           </Link>
           <Link to="/" activeOptions={{ exact: true, includeSearch: false }} activeProps={{ "aria-current": "page" }}>
-            Tomorrow
-          </Link>
-          <Link to="/results" activeProps={{ "aria-current": "page" }}>
-            Results
+            2 · Replay a test day
+            <small>one past day, plan vs reality</small>
           </Link>
           <Link to="/battery" activeOptions={{ includeSearch: false }} activeProps={{ "aria-current": "page" }}>
-            Try a battery
+            3 · Battery simulator
+            <small>try another battery size</small>
+          </Link>
+          <Link to="/results" activeProps={{ "aria-current": "page" }}>
+            4 · October results
+            <small>did it work, in CHF</small>
           </Link>
           <Link to="/how" activeProps={{ "aria-current": "page" }}>
-            How it works
+            5 · How it works
+            <small>method and limits</small>
           </Link>
         </nav>
         {meta.data && (
           <span className="clock">
-            Forecast at {meta.data.forecast_time_local}, bids due {meta.data.gate_closure_local}
+            Every day: forecast at {meta.data.forecast_time_local}, bids due {meta.data.gate_closure_local}
           </span>
         )}
       </header>

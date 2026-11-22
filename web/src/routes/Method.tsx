@@ -1,5 +1,5 @@
 import { useMeta, useMethod } from "../data/api";
-import { Fold } from "../ui/Blocks";
+import { Fold, PageIntro, Step } from "../ui/Blocks";
 
 const KEY_LIMITS = [/imbalance|penalty/i, /one test month|only one/i, /fictional/i, /observed weather/i];
 
@@ -15,11 +15,18 @@ export function MethodPage() {
 
   return (
     <>
-      <h1 className="statement long">One forecast a day, an hour before the auction closes.</h1>
-      <p className="lede">
-        {meta.data.company} is a fictional utility that supplies the city of Zurich. Each morning it buys tomorrow’s electricity at the Swiss auction, without
-        knowing tomorrow’s demand or price.
-      </p>
+      <PageIntro
+        title="How it works"
+        what={
+          <>
+            the method in short. {meta.data.company} is a fictional utility that supplies the city of Zurich. Each morning it buys tomorrow’s electricity at the
+            Swiss auction, without knowing tomorrow’s demand or price. Two forecasts and a battery plan help it decide.
+          </>
+        }
+        how="read the timeline, then the main limits. The details at the bottom are for reference."
+      />
+
+      <Step n={1} title="One day, step by step" />
 
       <ol className="timeline">
         <li>
@@ -40,8 +47,8 @@ export function MethodPage() {
         </li>
       </ol>
 
-      <section className="section">
-        <h2>Keep in mind</h2>
+      <section>
+        <Step n={2} title="Keep in mind" hint="The main limits of the results." />
         <div className="limits">
           {shown.map((l) => (
             <div key={l.title}>
@@ -52,7 +59,8 @@ export function MethodPage() {
         </div>
       </section>
 
-      <div className="folds">
+      <Step n={3} title="Details (optional)" />
+      <div className="folds" style={{ marginTop: "0.5rem" }}>
         <Fold title="What the forecast may use" hint={`Only what was published by ${meta.data.forecast_time_local} the day before`}>
           <div className="table-scroll">
             <table className="data" style={{ maxWidth: "58rem" }}>

@@ -4,7 +4,7 @@ import { useDay, useMeta } from "../data/api";
 import type { DayPlan } from "../data/types";
 import { DayRail, RailLegend } from "../charts/DayRail";
 import { DayPicker, defaultDate } from "../ui/DayPicker";
-import { Figures, Fold } from "../ui/Blocks";
+import { Figures, Fold, PageIntro, Step } from "../ui/Blocks";
 import { planSentence } from "../ui/sentence";
 import { chf, dec1, dec2, int, pct } from "../lib/format";
 
@@ -24,15 +24,26 @@ export function Tomorrow() {
 
   return (
     <>
+      <PageIntro
+        title="Replay a test day"
+        what="one past day from the test (September or October 2026), planned exactly as the tool would have done it the morning before, and then compared with what really happened."
+        how="(1) pick a day, (2) read the decision, (3) switch between the plan and reality, (4) open the bids or the bill if you want the detail."
+      />
+
+      <Step n={1} title="Pick a day" />
       <DayPicker meta={meta.data} date={date} onChange={(d) => navigate({ to: "/", search: { date: d } })} />
       {day.isError && <p className="status error">There is no plan for {date}. Pick a day in September or October 2026.</p>}
       {plan && (
         <>
-          <h1 className="statement long">{planSentence(plan)}</h1>
+          <Step n={2} title="The decision made the morning before" hint="The whole plan in one sentence. “Store” = charge the battery, “use” = take energy out of the battery instead of buying it." />
+          <p className="statement long">{planSentence(plan)}</p>
 
-          <DayFigures plan={plan} showActual={showActual} />
-
-          <div className="daybar" style={{ marginTop: "2.5rem", marginBottom: 0 }}>
+          <Step
+            n={3}
+            title="Plan vs reality"
+            hint="“The plan at 10:00” shows what was expected when the bids were sent. “What really happened” shows the real cost and saving after the real prices and demand were known."
+          />
+          <div className="daybar" style={{ marginTop: "0.5rem", marginBottom: "1rem" }}>
             <div className="segmented" role="group" aria-label="What to show">
               <button type="button" aria-pressed={!showActual} onClick={() => setShowActual(false)}>
                 The plan at 10:00
@@ -42,12 +53,14 @@ export function Tomorrow() {
               </button>
             </div>
           </div>
+          <DayFigures plan={plan} showActual={showActual} />
           <div className="rail-wrap">
             <DayRail plan={plan} showActual={showActual} />
           </div>
           <RailLegend showActual={showActual} />
 
-          <div className="folds">
+          <Step n={4} title="Details (optional)" />
+          <div className="folds" style={{ marginTop: "0.5rem" }}>
             <Fold title={`The ${plan.bids.length} bids for the auction`} hint={`What is sent before ${meta.data.gate_closure_local}, hour by hour`}>
               <Bids plan={plan} />
             </Fold>

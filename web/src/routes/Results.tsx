@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useBacktest, useDrivers, useModels } from "../data/api";
 import type { ModelInfo } from "../data/types";
 import { HBars, LineChart } from "../charts/Charts";
-import { Figures, Fold } from "../ui/Blocks";
+import { Figures, Fold, PageIntro, Step } from "../ui/Blocks";
 import { chf, dec1, dec2, fmtDayMonth, int, pct } from "../lib/format";
 import { k, Ladder, Patterns, Sensitivities, StrategyTable } from "./ResultsParts";
 
@@ -28,8 +28,14 @@ export function Results() {
 
   return (
     <>
-      <h1 className="statement">In October the plan saved {chf(d.total_saving_chf)}.</h1>
-      <p className="lede">Compared with what a utility could do without any model: buy what the city used a week ago, and leave the battery off.</p>
+      <PageIntro
+        title="October results"
+        what="whether the tool works. October 2026 is the test month: no model or rule saw it before. Every day was planned the morning before and then settled with the real prices and demand."
+        how="read the three steps from top to bottom. Open the details at the bottom only if you want the full picture."
+      />
+
+      <Step n={1} title="How much money it saved" hint="Compared with a utility without any model: buy what the city used a week ago, and leave the battery off." />
+      <p className="statement">{chf(d.total_saving_chf)} saved in October.</p>
 
       <Figures
         items={[
@@ -47,8 +53,8 @@ export function Results() {
         </p>
       )}
 
-      <section className="section">
-        <h2>Saved, day by day</h2>
+      <section>
+        <Step n={2} title="Saved, day by day" hint="Running total over the month. The dashed line is the best possible, if tomorrow had been known exactly." />
         <LineChart
           labels={s.cumulative.dates.map(fmtDayMonth)}
           series={s.cumulative.series.filter((x) => LINES[x.key]).map((x) => ({ key: x.key, values: x.values, ...LINES[x.key] }))}
@@ -60,9 +66,8 @@ export function Results() {
         />
       </section>
 
-      <section className="section">
-        <h2>How good the forecasts are</h2>
-        <p>Both models were chosen on September, then tested once on October.</p>
+      <section>
+        <Step n={3} title="How good the two forecasts are" hint="Average miss per 4-hour block, our model against the simple rule “same as last week”. Both models were chosen on September, then tested once on October." />
         <div className="two-col even" style={{ marginTop: "1.25rem" }}>
           <Accuracy m={models.data.demand} />
           <Accuracy m={models.data.price} />
@@ -94,7 +99,8 @@ export function Results() {
         />
       </section>
 
-      <div className="folds">
+      <Step n={4} title="Details (optional)" hint="For questions after the presentation." />
+      <div className="folds" style={{ marginTop: "0.5rem" }}>
         <Fold title="What the forecasts rely on" hint="The inputs that matter most, and the ones that do not">
           <div className="two-col even">
             <Inputs m={models.data.demand} />

@@ -142,9 +142,9 @@ Report tables (check that every table in the report matches the result files):
 | Features, backtest | not timed in the result files; the backtest prints its own duration |
 | App start | a few seconds; planning one day takes well under a second |
 
-## Plan live (tomorrow from today's data)
+## Plan tomorrow (live, from today's data)
 
-The **Plan live** page of the web app does the real daily job: on day D it downloads the data known today, builds
+The **Plan tomorrow** page (first tab) of the web app does the real daily job: on day D it downloads the data known today, builds
 tomorrow's inputs with the same feature code, forecasts demand and price with the saved models, plans the battery
 with the same tuned rules as the backtest and shows the hourly auction bids (CSV download). Small "what if" inputs
 (temperature shift, holiday, gas price, demand correction, battery level) re-plan in a few seconds. Plans made

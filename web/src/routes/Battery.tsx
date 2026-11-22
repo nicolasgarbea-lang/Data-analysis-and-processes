@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { runMonth, useApiHealth, useCustomPlan, useDay, useMeta } from "../data/api";
 import type { BatterySettings } from "../data/types";
 import { DayRail, RailLegend } from "../charts/DayRail";
-import { Fold } from "../ui/Blocks";
+import { Fold, PageIntro, Step } from "../ui/Blocks";
 import { DayPicker, defaultDate } from "../ui/DayPicker";
 import { planSentence } from "../ui/sentence";
 import { StartCommands } from "../ui/StartService";
@@ -71,12 +71,20 @@ export function Battery() {
 
   return (
     <>
-      <h1 className="statement">Try a different battery.</h1>
-      <p className="lede">Move a slider and the day is planned again. Run October to see what that battery would have saved over the month.</p>
+      <PageIntro
+        title="Battery simulator"
+        what={
+          <>
+            what a <b>different battery</b> would have saved. Only the battery changes: the demand and price forecasts stay the same. The savings shown here
+            are the battery’s part only, not the demand-forecast part.
+          </>
+        }
+        how="(1) set the battery with the sliders, (2) press Run October for the month total, (3) look at one day to see how this battery would run."
+      />
 
-      <section className="section two-col">
+      <section className="two-col">
         <div>
-          <h2 className="h2">The battery</h2>
+          <Step n={1} title="Choose a battery" hint={`Starts at the project’s battery (${meta.data.battery.power_mw} MW / ${meta.data.battery.capacity_mwh} MWh).`} />
           <div className="sliders">
             <Slider label="Power" hint="How fast it can charge or empty" value={battery.power_mw} min={1} max={100} step={1} show={(v) => `${v} MW`} onChange={(v) => set({ power_mw: v })} />
             <Slider
@@ -154,13 +162,12 @@ export function Battery() {
         </div>
 
         <div>
-          <h2 className="h2">October with this battery</h2>
+          <Step n={2} title="Test it on October" hint="Plans and settles all 31 days of the test month with this battery, using the real prices." />
           {!online ? (
             <Offline checking={health.isLoading} />
           ) : (
             <>
-              <p className="explain">Plans and settles all 31 days of the test month, in a few seconds.</p>
-              <p style={{ marginTop: "1rem" }}>
+              <p style={{ marginTop: "0.5rem" }}>
                 <button type="button" className="btn" onClick={() => month.mutate(battery)} disabled={month.isPending}>
                   {month.isPending ? "Running October…" : "Run October"}
                 </button>
@@ -173,11 +180,16 @@ export function Battery() {
                     <dd>{chf(month.data.battery_value_chf)}</dd>
                   </div>
                   <div>
-                    <dt>
-                      {pct((100 * month.data.battery_value_chf) / month.data.ceiling_battery_value_chf)} of the best possible ({chf(month.data.ceiling_battery_value_chf)}), and{" "}
-                      {chf(month.data.battery_value_chf / battery.capacity_mwh)} per MWh of capacity
-                    </dt>
-                    <dd style={{ fontSize: "var(--step-1)" }}>{dec1(month.data.cycles)} cycles</dd>
+                    <dt>of the best possible ({chf(month.data.ceiling_battery_value_chf)} if tomorrow’s prices had been known exactly)</dt>
+                    <dd style={{ fontSize: "var(--step-2)" }}>{pct((100 * month.data.battery_value_chf) / month.data.ceiling_battery_value_chf)}</dd>
+                  </div>
+                  <div>
+                    <dt>saved per MWh of capacity (to compare battery sizes)</dt>
+                    <dd style={{ fontSize: "var(--step-1)" }}>{chf(month.data.battery_value_chf / battery.capacity_mwh)}</dd>
+                  </div>
+                  <div>
+                    <dt>full charge-and-empty cycles in the month (at most {dec1(battery.max_cycles_per_day)} per day)</dt>
+                    <dd style={{ fontSize: "var(--step-1)" }}>{dec1(month.data.cycles)}</dd>
                   </div>
                 </dl>
               )}
@@ -189,9 +201,9 @@ export function Battery() {
         </div>
       </section>
 
-      <section className="section">
-        <h2>One day with this battery</h2>
-        <div style={{ marginTop: "1rem" }}>
+      <section>
+        <Step n={3} title="See one day with this battery" hint="Pick a day. The chart shows when the battery stores (blue) and uses (orange) energy, against the price." />
+        <div style={{ marginTop: "0.5rem" }}>
           <DayPicker meta={meta.data} date={date} onChange={(d) => navigate({ to: "/battery", search: { date: d } })} />
         </div>
         {!online && base.data && (
