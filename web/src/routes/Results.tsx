@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useBacktest, useDrivers, useModels } from "../data/api";
 import type { ModelInfo } from "../data/types";
 import { HBars, LineChart } from "../charts/Charts";
-import { Figures, Fold, PageIntro, Step } from "../ui/Blocks";
+import { Card, Fold, PageIntro } from "../ui/Blocks";
 import { chf, dec1, dec2, fmtDayMonth, int, pct } from "../lib/format";
 import { k, Ladder, Patterns, Sensitivities, StrategyTable } from "./ResultsParts";
 
@@ -31,76 +31,82 @@ export function Results() {
       <PageIntro
         title="October results"
         what="whether the tool works. October 2026 is the test month: no model or rule saw it before. Every day was planned the morning before and then settled with the real prices and demand."
-        how="read the three steps from top to bottom. Open the details at the bottom only if you want the full picture."
+        how="the three cards give the answer; the closed sections at the bottom are for questions."
       />
 
-      <Step n={1} title="How much money it saved" hint="Compared with a utility without any model: buy what the city used a week ago, and leave the battery off." />
-      <p className="statement">{chf(d.total_saving_chf)} saved in October.</p>
-
-      <Figures
-        items={[
-          { value: chf(d.demand_forecast_part_chf), label: "from forecasting demand better, so fewer penalties for buying the wrong amount" },
-          { value: chf(d.battery_part_chf), label: "from the battery: storing cheap energy and using it when the price is high" },
-          { value: pct(d.pct_ceiling_captured_total), label: "of what knowing the future would have saved" },
-        ]}
-      />
-
-      {half && s.ci && (
-        <p className="caveat">
-          <strong>Two things to keep in mind.</strong> The penalty for buying the wrong amount is our assumption (20 % of the price). At half that penalty the
-          October saving is {chf(half.total_saving_chf)}; the battery part hardly changes. And 31 days is short: anything from {chf(s.ci.block_low)} to{" "}
-          {chf(s.ci.block_high)} is plausible.
-        </p>
-      )}
-
-      <section>
-        <Step n={2} title="Saved, day by day" hint="Running total over the month. The dashed line is the best possible, if tomorrow had been known exactly." />
-        <LineChart
-          labels={s.cumulative.dates.map(fmtDayMonth)}
-          series={s.cumulative.series.filter((x) => LINES[x.key]).map((x) => ({ key: x.key, values: x.values, ...LINES[x.key] }))}
-          yFormat={k}
-          yTitle="CHF saved so far in October"
-          zero
-          height={320}
-          ariaLabel="Running total of the October saving for our plan, the forecast without battery, and perfect foresight"
-        />
-      </section>
-
-      <section>
-        <Step n={3} title="How good the two forecasts are" hint="Average miss per 4-hour block, our model against the simple rule “same as last week”. Both models were chosen on September, then tested once on October." />
-        <div className="two-col even" style={{ marginTop: "1.25rem" }}>
-          <Accuracy m={models.data.demand} />
-          <Accuracy m={models.data.price} />
-        </div>
-
-        <div className="daybar" style={{ marginTop: "2.5rem", marginBottom: 0 }}>
-          <div className="segmented" role="group" aria-label="Which forecast">
-            <button type="button" aria-pressed={target === "demand"} onClick={() => setTarget("demand")}>
-              Demand
-            </button>
-            <button type="button" aria-pressed={target === "price"} onClick={() => setTarget("price")}>
-              Price
-            </button>
+      <Card n={1} title="How much money it saved" hint="Compared with a utility without any model: buy what the city used a week ago, and leave the battery off.">
+        <dl className="figures four">
+          <div className="good">
+            <dt>saved in October</dt>
+            <dd>{chf(d.total_saving_chf)}</dd>
           </div>
-          <span className="when">Every forecast of October, made the day before, against what happened</span>
-        </div>
-        <LineChart
-          height={280}
-          labels={m.test_series.map((r) => `${fmtDayMonth(r.date)}, ${["00–04", "04–08", "08–12", "12–16", "16–20", "20–24"][r.block]}`)}
-          xTicks={m.test_series.map((r, i) => (r.block === 0 && [1, 8, 15, 22, 29].includes(Number(r.date.slice(8))) ? i : -1)).filter((i) => i >= 0)}
-          xTickFormat={(_, i) => fmtDayMonth(m.test_series[i].date)}
-          series={[
-            { key: "f", name: "Forecast", values: m.test_series.map((r) => r.best), color: target === "demand" ? "var(--demand)" : "var(--price)", width: 2 },
-            { key: "a", name: "Actual", values: m.test_series.map((r) => r.actual), color: "var(--ink)", width: 1 },
-          ]}
-          yTitle={m.unit}
-          yFormat={int}
-          ariaLabel={`Forecast and actual ${target} for every block of October 2026`}
-        />
-      </section>
+          <div>
+            <dt>from forecasting demand better, so fewer penalties for buying the wrong amount</dt>
+            <dd>{chf(d.demand_forecast_part_chf)}</dd>
+          </div>
+          <div>
+            <dt>from the battery: storing cheap energy and using it when the price is high</dt>
+            <dd>{chf(d.battery_part_chf)}</dd>
+          </div>
+          <div>
+            <dt>of what knowing the future would have saved</dt>
+            <dd>{pct(d.pct_ceiling_captured_total)}</dd>
+          </div>
+        </dl>
+        {half && s.ci && (
+          <p className="caveat">
+            <strong>Keep in mind:</strong> the penalty for buying the wrong amount is our assumption (20 % of the price). At half that penalty the October saving
+            is {chf(half.total_saving_chf)}. And 31 days is short: anything from {chf(s.ci.block_low)} to {chf(s.ci.block_high)} is plausible.
+          </p>
+        )}
+      </Card>
 
-      <Step n={4} title="Details (optional)" hint="For questions after the presentation." />
-      <div className="folds" style={{ marginTop: "0.5rem" }}>
+      <div className="grid-2">
+        <Card n={2} title="Saved, day by day" hint="Running total. Dashed = the best possible, if tomorrow had been known exactly.">
+          <LineChart
+            labels={s.cumulative.dates.map(fmtDayMonth)}
+            series={s.cumulative.series.filter((x) => LINES[x.key]).map((x) => ({ key: x.key, values: x.values, ...LINES[x.key] }))}
+            yFormat={k}
+            yTitle="CHF saved so far in October"
+            zero
+            height={250}
+            ariaLabel="Running total of the October saving for our plan, the forecast without battery, and perfect foresight"
+          />
+        </Card>
+
+        <Card n={3} title="How good the two forecasts are" hint="Average miss per 4-hour block, against “same as last week”. Chosen on September, tested once on October.">
+          <div className="two-col even">
+            <Accuracy m={models.data.demand} />
+            <Accuracy m={models.data.price} />
+          </div>
+          <div className="daybar" style={{ marginTop: "1rem", marginBottom: 0 }}>
+            <div className="segmented" role="group" aria-label="Which forecast">
+              <button type="button" aria-pressed={target === "demand"} onClick={() => setTarget("demand")}>
+                Demand
+              </button>
+              <button type="button" aria-pressed={target === "price"} onClick={() => setTarget("price")}>
+                Price
+              </button>
+            </div>
+            <span className="when">Every October forecast against what happened</span>
+          </div>
+          <LineChart
+            height={170}
+            labels={m.test_series.map((r) => `${fmtDayMonth(r.date)}, ${["00–04", "04–08", "08–12", "12–16", "16–20", "20–24"][r.block]}`)}
+            xTicks={m.test_series.map((r, i) => (r.block === 0 && [1, 8, 15, 22, 29].includes(Number(r.date.slice(8))) ? i : -1)).filter((i) => i >= 0)}
+            xTickFormat={(_, i) => fmtDayMonth(m.test_series[i].date)}
+            series={[
+              { key: "f", name: "Forecast", values: m.test_series.map((r) => r.best), color: target === "demand" ? "var(--demand)" : "var(--price)", width: 2 },
+              { key: "a", name: "Actual", values: m.test_series.map((r) => r.actual), color: "var(--ink)", width: 1 },
+            ]}
+            yTitle={m.unit}
+            yFormat={int}
+            ariaLabel={`Forecast and actual ${target} for every block of October 2026`}
+          />
+        </Card>
+      </div>
+
+      <div className="folds">
         <Fold title="What the forecasts rely on" hint="The inputs that matter most, and the ones that do not">
           <div className="two-col even">
             <Inputs m={models.data.demand} />

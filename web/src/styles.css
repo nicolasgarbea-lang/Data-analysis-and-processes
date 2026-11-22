@@ -1084,3 +1084,326 @@ details.fold > summary:hover small {
   font-weight: 400;
   line-height: 1.2;
 }
+
+/* =====================================================================
+   Compact dashboard layout (one screen per page where possible).
+   Overrides the larger editorial sizes above.
+   ===================================================================== */
+
+html {
+  font-size: 93.75%; /* 15px base: every rem-based size shrinks with it */
+}
+
+:root {
+  --step-1: 1.03rem;
+  --step-2: 1.2rem;
+  --step-3: 1.5rem;
+  --step-4: clamp(1.35rem, 1rem + 1vw, 1.9rem);
+}
+
+.masthead {
+  padding-top: 0.6rem;
+  gap: 0.3rem 1.5rem;
+}
+
+.wordmark,
+.masthead nav a,
+.masthead .clock {
+  padding-bottom: 0.5rem;
+}
+
+main {
+  padding: 1rem var(--gutter) 2.5rem;
+  max-width: 100rem;
+}
+
+.intro {
+  max-width: none;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 1rem;
+  border-left-width: 4px;
+}
+
+.intro-title {
+  font-size: var(--step-3);
+  margin-bottom: 0.2rem;
+}
+
+.intro p {
+  margin-top: 0.1rem;
+  font-size: var(--step--1);
+}
+
+/* the dashboard: settings on the left, results on the right */
+.dash {
+  display: grid;
+  grid-template-columns: minmax(17rem, 21rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.dash-side {
+  position: sticky;
+  top: 0.75rem;
+  max-height: calc(100vh - 1.5rem);
+  overflow-y: auto;
+  display: grid;
+  gap: 0.75rem;
+  padding-right: 0.15rem;
+}
+
+.dash-main {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+  align-items: start;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 0.8rem 0.95rem 0.95rem;
+  min-width: 0;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-variation-settings: var(--wide);
+  font-weight: 660;
+  font-size: var(--step-1);
+  line-height: 1.2;
+}
+
+.card .step-num {
+  width: 1.4rem;
+  height: 1.4rem;
+  font-size: 0.75rem;
+}
+
+.card-hint {
+  color: var(--ink-2);
+  font-size: var(--step--1);
+  margin-top: 0.2rem;
+  max-width: var(--measure);
+}
+
+.card-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.sentence {
+  font-variation-settings: var(--wide);
+  font-weight: 680;
+  font-size: var(--step-2);
+  line-height: 1.2;
+  margin-top: 0.6rem;
+  max-width: 60ch;
+}
+
+.figures {
+  margin-top: 0.75rem;
+  border-top-width: 1.5px;
+  max-width: none;
+  gap: 0 1.25rem;
+}
+
+.figures > div {
+  padding-top: 0.5rem;
+}
+
+.figures dd {
+  font-size: var(--step-2);
+}
+
+.figures dt {
+  font-size: var(--step--1);
+  margin-top: 0.2rem;
+}
+
+.figures.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.caveat {
+  max-width: none;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.8rem;
+  font-size: var(--step--1);
+}
+
+.rail-wrap {
+  margin-top: 0.75rem;
+}
+
+.folds {
+  margin-top: 1rem;
+}
+
+details.fold > summary {
+  padding: 0.6rem 0;
+  font-size: var(--step-0);
+}
+
+details.fold > summary small {
+  font-size: var(--step--1);
+}
+
+.fold-body {
+  padding-bottom: 1.25rem;
+}
+
+.daybar {
+  margin-bottom: 0.4rem;
+  gap: 0.4rem 0.75rem;
+  font-size: var(--step--1);
+}
+
+.card .daybar {
+  margin-top: 0.5rem;
+}
+
+.segmented button {
+  padding: 0.3rem 0.7rem;
+  font-size: var(--step--1);
+}
+
+.card .segmented {
+  margin-top: 0.6rem;
+}
+
+.sliders {
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.slider label {
+  font-size: var(--step--1);
+}
+
+.slider small,
+.field small {
+  font-size: 0.72rem;
+}
+
+.btn.small {
+  padding: 0.35rem 0.75rem;
+  font-size: var(--step--1);
+  margin-top: 0.5rem;
+}
+
+.park-total {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--charge-tint);
+  border-radius: 6px;
+  font-size: var(--step--1);
+}
+
+details.mini-fold {
+  margin-top: 0.4rem;
+}
+
+details.mini-fold > summary {
+  cursor: pointer;
+  font-size: var(--step--1);
+  color: var(--ink-2);
+}
+
+details.mini-fold > summary:hover {
+  color: var(--ink);
+}
+
+.data-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.card .chips {
+  margin-top: 0.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.card .chip {
+  white-space: normal;
+}
+
+.card .live-form {
+  grid-template-columns: 1fr;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.card .field label {
+  font-size: var(--step--1);
+}
+
+.replan-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+  background: var(--paper);
+}
+
+.live-made {
+  font-size: var(--step--1);
+  margin-top: 0.4rem;
+}
+
+.block-cards {
+  margin-top: 0.75rem;
+  gap: 0.45rem;
+}
+
+.block-card {
+  font-size: var(--step--1);
+}
+
+.dash-main .two-col.even {
+  gap: 1rem;
+}
+
+.note {
+  font-size: 0.78rem;
+}
+
+.timeline {
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 62rem) {
+  .dash,
+  .grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dash-side {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .figures.four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

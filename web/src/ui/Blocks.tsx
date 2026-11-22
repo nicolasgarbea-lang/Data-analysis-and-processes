@@ -46,6 +46,24 @@ export function Step({ n, title, hint }: { n: number | string; title: string; hi
   );
 }
 
+/** A dashboard card: a numbered title, an optional one-line hint, then its content. */
+export function Card({ n, title, hint, children, className }: { n?: number | string; title: ReactNode; hint?: ReactNode; children?: ReactNode; className?: string }) {
+  return (
+    <section className={`card ${className ?? ""}`}>
+      <h2 className="card-title">
+        {n != null && (
+          <span className="step-num" aria-hidden="true">
+            {n}
+          </span>
+        )}
+        {title}
+      </h2>
+      {hint && <p className="card-hint">{hint}</p>}
+      {children}
+    </section>
+  );
+}
+
 /** A closed section the reader can open for the detail. */
 export function Fold({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (

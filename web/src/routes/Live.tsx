@@ -4,7 +4,8 @@ import { refreshLive, useApiHealth, useLiveLog, useLivePlan, useLiveStatus, useM
 import type { LiveLogEntry, LivePlan, LivePlanRequest, LiveSource, Option } from "../data/types";
 import { LineChart, ChartLegend } from "../charts/Charts";
 import { OPTION_WORDS } from "../charts/DayRail";
-import { Figures, Fold, PageIntro, Step } from "../ui/Blocks";
+import { Card, Figures, Fold, PageIntro } from "../ui/Blocks";
+import { BatteryControls, parkFrom, parkSettings, type BatteryPark } from "../ui/BatteryCard";
 import { planSentence } from "../ui/sentence";
 import { chf, dec1, dec2, fmtDayMonth, fmtLongDate, int } from "../lib/format";
 import { StartCommands } from "../ui/StartService";
@@ -77,6 +78,10 @@ export function Live() {
     if (madeAt) qc.invalidateQueries({ queryKey: ["live-log"] });
   }, [madeAt, qc]);
   const [form, setForm] = useState<Form>(EMPTY_FORM);
+  const [park, setPark] = useState<BatteryPark | null>(null);
+  useEffect(() => {
+    if (meta.data && !park) setPark(parkFrom(meta.data.battery));
+  }, [meta.data, park]);
 
   const refresh = useMutation({
     mutationFn: () => refreshLive(true), // always download again: a normal refresh would return today's cache
@@ -97,15 +102,18 @@ export function Live() {
   const delivery = p?.delivery_date ?? status.data?.delivery_date;
 
   const replan = () => {
-    if (!meta.data) return;
+    if (!park) return;
     const gas = form.gas.trim() === "" ? null : Number(form.gas);
     const soc = form.soc.trim() === "" ? undefined : Number(form.soc);
     setReq({
-      battery: meta.data.battery,
+      battery: parkSettings(park),
       ...(soc != null && isFinite(soc) ? { soc_start_mwh: soc } : {}),
       overrides: { temp_shift_c: form.temp, is_holiday: form.holiday, gas_eur_mwh: gas != null && isFinite(gas) ? gas : null, demand_scale_pct: form.scale },
     });
   };
+  const nBad = sources.filter((s) => sourceTone(s) === "bad").length;
+  const nWarn = sources.filter((s) => sourceTone(s) === "warn").length;
+  const pending = !!(park && req && JSON.stringify(parkSettings(park)) !== JSON.stringify(req.battery));
 
   return (
     <>
@@ -113,72 +121,106 @@ export function Live() {
         title="Plan tomorrow"
         what={
           <>
-            the real daily job. From the data known today, the two models forecast tomorrow’s demand and price, the optimiser plans the battery, and you get
-            the bids to send to the auction{delivery ? ` for ${fmtLongDate(delivery)}` : ""}.
+            the real daily job. From today’s data the two models forecast tomorrow’s demand and price, the optimiser plans the battery, and you get the bids
+            for the auction{delivery ? ` for ${fmtLongDate(delivery)}` : ""}.
           </>
         }
-        how="(1) download today’s data, (2) read the plan, (3) optionally change an input and re-plan, (4) check how past live plans did."
+        how="get today’s data, set the battery and any what-ifs on the left, press Re-plan. The plan is on the right."
       />
 
-      <Step n={1} title="Get today’s data" hint="Each chip is one data source. Green = up to date, orange = estimated or old, red = missing. Hover a chip for details." />
-      <div className="live-status" aria-label="Data status">
-        <div className="chips">
-          {sources.length === 0 && <span className="note">{status.isLoading ? "Checking the data…" : "No data status yet."}</span>}
-          {sources.map((s) => (
-            <span key={s.source} className={`chip ${sourceTone(s)}`} title={`${s.message || (s.ok ? "Up to date" : "Missing")}\nLast data: ${atDayTime(s.last_timestamp_utc)}`}>
-              {s.label}
-              <small>{s.last_timestamp_utc ? atDayTime(s.last_timestamp_utc) : "no data"}</small>
-            </span>
-          ))}
+      <div className="dash">
+        <aside className="dash-side">
+          <Card n={1} title="Today’s data" hint="Green = up to date, orange = estimated or old, red = missing.">
+            <p className="data-summary">
+              {sources.length === 0 ? (
+                <span className="note">{status.isLoading ? "Checking the data…" : "No data status yet."}</span>
+              ) : (
+                <>
+                  <span className="chip good">{sources.length - nBad - nWarn} up to date</span>
+                  {nWarn > 0 && <span className="chip warn">{nWarn} estimated</span>}
+                  {nBad > 0 && <span className="chip bad">{nBad} missing</span>}
+                </>
+              )}
+            </p>
+            <button type="button" className="btn small" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+              {refresh.isPending ? "Downloading…" : "Get today’s data"}
+            </button>
+            {refresh.isPending && <p className="live-progress">Downloading, this takes 1–3 minutes… ({elapsed} s)</p>}
+            {refresh.isError && <p className="live-progress status error">The download failed: {(refresh.error as Error).message}</p>}
+            {status.data?.fetched_at_utc && !refresh.isPending && <p className="live-progress">Last download {atDayTime(status.data.fetched_at_utc)}.</p>}
+            {sources.length > 0 && (
+              <details className="mini-fold">
+                <summary>Show the {sources.length} sources</summary>
+                <div className="chips">
+                  {sources.map((s) => (
+                    <span key={s.source} className={`chip ${sourceTone(s)}`} title={`${s.message || (s.ok ? "Up to date" : "Missing")}
+Last data: ${atDayTime(s.last_timestamp_utc)}`}>
+                      {s.label}
+                      <small>{s.last_timestamp_utc ? atDayTime(s.last_timestamp_utc) : "no data"}</small>
+                    </span>
+                  ))}
+                </div>
+              </details>
+            )}
+          </Card>
+
+          {park && meta.data && (
+            <Card n={2} title="Battery" hint="Plan tomorrow with a different battery, or several. Press Re-plan to apply.">
+              <BatteryControls park={park} onChange={setPark} standard={meta.data.battery} idPrefix="live" />
+            </Card>
+          )}
+
+          <Card n={3} title="What if? (optional)" hint="Change an input, then press Re-plan.">
+            <InputsForm form={form} setForm={setForm} plan={p} capacity={park ? parkSettings(park).capacity_mwh : undefined} />
+          </Card>
+
+          <div className="replan-bar">
+            <button type="button" className="btn" onClick={replan} disabled={!park || plan.isFetching}>
+              {plan.isFetching ? "Planning…" : "Re-plan"}
+            </button>
+            <button type="button" className="btn quiet" onClick={() => setForm(EMPTY_FORM)}>
+              Reset what-ifs
+            </button>
+            {pending && <span className="card-hint">Battery changed: press Re-plan.</span>}
+          </div>
+          <p className="note">Plans with a changed battery or what-ifs are not saved to the track record.</p>
+        </aside>
+
+        <div className="dash-main">
+          <Card
+            n={4}
+            title={delivery ? `The plan for ${fmtLongDate(delivery)}` : "The plan for tomorrow"}
+            hint="The sentence is the whole decision. Each card is one 4-hour block of tomorrow."
+          >
+            {p && (
+              <p className="live-made">
+                Made {atDayTime(p.made_at_utc)} from the data known at {p.issue_time_local}, with a {int(p.battery.power_mw)} MW / {int(p.battery.capacity_mwh)} MWh
+                battery.
+                {p.is_holiday && ` ${p.holiday_name ?? "A public holiday"}.`}
+                {p.event_name && ` ${p.event_name}.`}
+              </p>
+            )}
+            {plan.isError && <p className="status error">Tomorrow could not be planned: {(plan.error as Error).message}</p>}
+            {!p && plan.isLoading && <p className="status">Planning tomorrow…</p>}
+            {p && (
+              <div style={{ opacity: plan.isFetching ? 0.6 : 1 }}>
+                <Result plan={p} />
+              </div>
+            )}
+          </Card>
+
+          <div className="folds">
+            {p && p.inputs.length > 0 && (
+              <Fold title="The inputs the plan used" hint="Latest known values, with where they come from">
+                <InputsTable plan={p} />
+              </Fold>
+            )}
+            <Fold title="Track record" hint="Every standard live plan, compared with the real values once they are published (1–2 days later)">
+              <TrackRecord entries={log.data} error={log.isError ? (log.error as Error).message : null} />
+            </Fold>
+          </div>
         </div>
-        <button type="button" className="btn" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
-          {refresh.isPending ? "Downloading…" : "Get today’s data"}
-        </button>
-        {refresh.isPending && <p className="live-progress">Downloading today’s data, this takes 1–3 minutes… ({elapsed} s)</p>}
-        {refresh.isError && <p className="live-progress status error">The download failed: {(refresh.error as Error).message}</p>}
-        {status.data?.fetched_at_utc && !refresh.isPending && <p className="live-progress">Last download {atDayTime(status.data.fetched_at_utc)}. Hover a source for details.</p>}
       </div>
-
-      <Step
-        n={2}
-        title={delivery ? `The plan for ${fmtLongDate(delivery)}` : "The plan for tomorrow"}
-        hint="The sentence is the whole decision. The six cards are the six 4-hour blocks of tomorrow: what the city will need, the expected price, and what to buy, store or use."
-      />
-      {p && (
-        <p className="live-made">
-          Made {atDayTime(p.made_at_utc)} from the data known at {p.issue_time_local}.
-          {p.is_holiday && ` ${p.holiday_name ?? "A public holiday"}.`}
-          {p.event_name && ` ${p.event_name}.`}
-        </p>
-      )}
-      {plan.isError && <p className="status error">Tomorrow could not be planned: {(plan.error as Error).message}</p>}
-      {!p && plan.isLoading && <p className="status">Planning tomorrow…</p>}
-      {p && (
-        <div style={{ opacity: plan.isFetching ? 0.6 : 1 }}>
-          <Result plan={p} />
-        </div>
-      )}
-
-      <Step n={3} title="What if? (optional)" hint="Change an input and press Re-plan. The forecast and the battery plan in step 2 are made again with the same models. What-if plans are not saved to the track record." />
-      <section>
-        <InputsForm form={form} setForm={setForm} plan={p} capacity={meta.data?.battery.capacity_mwh} />
-        <div className="daybar" style={{ marginTop: "1.25rem", marginBottom: 0 }}>
-          <button type="button" className="btn" onClick={replan} disabled={!meta.data || plan.isFetching}>
-            {plan.isFetching ? "Planning…" : "Re-plan"}
-          </button>
-          <button type="button" className="btn quiet" onClick={() => setForm(EMPTY_FORM)}>
-            Reset inputs
-          </button>
-        </div>
-        {p && p.inputs.length > 0 && (
-          <Fold title="The inputs the plan used" hint="Latest known values, with where they come from">
-            <InputsTable plan={p} />
-          </Fold>
-        )}
-      </section>
-
-      <Step n={4} title="Track record" hint="Every live plan without what-ifs is kept. Once the real demand and prices are published (about 1–2 days later), the forecast is compared with them." />
-      <TrackRecord entries={log.data} error={log.isError ? (log.error as Error).message : null} />
     </>
   );
 }
@@ -304,7 +346,7 @@ function Result({ plan }: { plan: LivePlan }) {
   const s = plan.summary;
   return (
     <section>
-      <p className="statement long" style={{ marginTop: 0 }}>
+      <p className="sentence">
         {planSentence(plan)}
       </p>
       <Figures

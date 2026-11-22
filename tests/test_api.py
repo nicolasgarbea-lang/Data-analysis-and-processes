@@ -43,7 +43,7 @@ def test_bigger_battery_changes_plan(client):
 
 
 @pytest.mark.parametrize("change", [
-    {"power_mw": 500}, {"capacity_mwh": 0.5}, {"soc_min_frac": 0.9, "soc_max_frac": 0.5},
+    {"power_mw": 5000}, {"capacity_mwh": 0.5}, {"soc_min_frac": 0.9, "soc_max_frac": 0.5},
     {"round_trip_efficiency": 0.3}, {"max_cycles_per_day": 5}, {"wear_cost_eur_per_mwh": -1},
 ])
 def test_invalid_battery_422(client, change):

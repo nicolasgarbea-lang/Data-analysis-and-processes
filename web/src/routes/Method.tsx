@@ -1,5 +1,5 @@
 import { useMeta, useMethod } from "../data/api";
-import { Fold, PageIntro, Step } from "../ui/Blocks";
+import { Card, Fold, PageIntro } from "../ui/Blocks";
 
 const KEY_LIMITS = [/imbalance|penalty/i, /one test month|only one/i, /fictional/i, /observed weather/i];
 
@@ -23,11 +23,11 @@ export function MethodPage() {
             Swiss auction, without knowing tomorrow’s demand or price. Two forecasts and a battery plan help it decide.
           </>
         }
-        how="read the timeline, then the main limits. The details at the bottom are for reference."
+        how="read the two cards; the closed sections at the bottom are for reference."
       />
 
-      <Step n={1} title="One day, step by step" />
-
+      <div className="grid-2">
+        <Card n={1} title="One day, step by step">
       <ol className="timeline">
         <li>
           <span className="time">{meta.data.forecast_time_local}</span>
@@ -46,9 +46,9 @@ export function MethodPage() {
           <p>Energy is delivered. Buying too much or too little costs a penalty of {shortage} % of the price.</p>
         </li>
       </ol>
+        </Card>
 
-      <section>
-        <Step n={2} title="Keep in mind" hint="The main limits of the results." />
+        <Card n={2} title="Keep in mind" hint="The main limits of the results.">
         <div className="limits">
           {shown.map((l) => (
             <div key={l.title}>
@@ -57,10 +57,10 @@ export function MethodPage() {
             </div>
           ))}
         </div>
-      </section>
+        </Card>
+      </div>
 
-      <Step n={3} title="Details (optional)" />
-      <div className="folds" style={{ marginTop: "0.5rem" }}>
+      <div className="folds">
         <Fold title="What the forecast may use" hint={`Only what was published by ${meta.data.forecast_time_local} the day before`}>
           <div className="table-scroll">
             <table className="data" style={{ maxWidth: "58rem" }}>

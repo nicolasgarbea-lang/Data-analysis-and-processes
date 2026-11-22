@@ -18,7 +18,7 @@ const OPTION_SHORT: Record<Option, string> = {
 };
 
 type Strip = "tiles" | "price" | "battery";
-const HEIGHT: Record<Strip | "axis", number> = { axis: 26, tiles: 64, price: 128, battery: 112 };
+const HEIGHT: Record<Strip | "axis", number> = { axis: 24, tiles: 54, price: 100, battery: 84 };
 const GUTTER = 120;
 const RIGHT = 16;
 const GAP = 18;
