@@ -39,8 +39,8 @@ from src.export import export_web as ex
 class BatterySettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    power_mw: float = Field(ge=1, le=200)
-    capacity_mwh: float = Field(ge=1, le=400)
+    power_mw: float = Field(ge=1, le=1000)   # total of all units (app: up to 10 x 100 MW)
+    capacity_mwh: float = Field(ge=1, le=4000)  # total of all units (app: up to 10 x 200 MWh)
     soc_min_frac: float = Field(ge=0, le=1)
     soc_max_frac: float = Field(ge=0, le=1)
     soc_start_frac: float = Field(ge=0, le=1)

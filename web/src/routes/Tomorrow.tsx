@@ -4,7 +4,7 @@ import { useDay, useMeta } from "../data/api";
 import type { DayPlan } from "../data/types";
 import { DayRail, RailLegend } from "../charts/DayRail";
 import { DayPicker, defaultDate } from "../ui/DayPicker";
-import { Figures, Fold } from "../ui/Blocks";
+import { Card, Figures, Fold, PageIntro } from "../ui/Blocks";
 import { planSentence } from "../ui/sentence";
 import { chf, dec1, dec2, int, pct } from "../lib/format";
 
@@ -24,15 +24,22 @@ export function Tomorrow() {
 
   return (
     <>
-      <DayPicker meta={meta.data} date={date} onChange={(d) => navigate({ to: "/", search: { date: d } })} />
-      {day.isError && <p className="status error">There is no plan for {date}. Pick a day in September or October 2026.</p>}
-      {plan && (
-        <>
-          <h1 className="statement long">{planSentence(plan)}</h1>
+      <PageIntro
+        title="Replay a test day"
+        what="one past day from the test (September or October 2026), planned exactly as the tool would have done it the morning before, and then compared with what really happened."
+        how="pick a day and choose plan or reality on the left; the decision and the day are on the right."
+      />
 
-          <DayFigures plan={plan} showActual={showActual} />
-
-          <div className="daybar" style={{ marginTop: "2.5rem", marginBottom: 0 }}>
+      <div className="dash">
+        <aside className="dash-side">
+          <Card n={1} title="Pick a day" hint="Any day of September or October 2026.">
+            <DayPicker meta={meta.data} date={date} onChange={(d) => navigate({ to: "/", search: { date: d } })} />
+          </Card>
+          <Card
+            n={2}
+            title="Plan or reality?"
+            hint="“The plan at 10:00” = what was expected when the bids were sent. “What really happened” = the real cost once prices and demand were known."
+          >
             <div className="segmented" role="group" aria-label="What to show">
               <button type="button" aria-pressed={!showActual} onClick={() => setShowActual(false)}>
                 The plan at 10:00
@@ -41,22 +48,33 @@ export function Tomorrow() {
                 What really happened
               </button>
             </div>
-          </div>
-          <div className="rail-wrap">
-            <DayRail plan={plan} showActual={showActual} />
-          </div>
-          <RailLegend showActual={showActual} />
+          </Card>
+        </aside>
 
-          <div className="folds">
-            <Fold title={`The ${plan.bids.length} bids for the auction`} hint={`What is sent before ${meta.data.gate_closure_local}, hour by hour`}>
-              <Bids plan={plan} />
-            </Fold>
-            <Fold title="Where the money went" hint="The day’s bill, line by line">
-              <Bill plan={plan} />
-            </Fold>
-          </div>
-        </>
-      )}
+        <div className="dash-main">
+          {day.isError && <p className="status error">There is no plan for {date}. Pick a day in September or October 2026.</p>}
+          {plan && (
+            <>
+              <Card n={3} title="The decision made the morning before" hint="“Store” = charge the battery, “use” = take energy out of the battery instead of buying it.">
+                <p className="sentence">{planSentence(plan)}</p>
+                <DayFigures plan={plan} showActual={showActual} />
+                <div className="rail-wrap">
+                  <DayRail plan={plan} showActual={showActual} />
+                </div>
+                <RailLegend showActual={showActual} />
+              </Card>
+              <div className="folds">
+                <Fold title={`The ${plan.bids.length} bids for the auction`} hint={`What is sent before ${meta.data.gate_closure_local}, hour by hour`}>
+                  <Bids plan={plan} />
+                </Fold>
+                <Fold title="Where the money went" hint="The day’s bill, line by line">
+                  <Bill plan={plan} />
+                </Fold>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </>
   );
 }

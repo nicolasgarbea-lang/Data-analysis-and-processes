@@ -1,5 +1,5 @@
 import { useMeta, useMethod } from "../data/api";
-import { Fold } from "../ui/Blocks";
+import { Card, Fold, PageIntro } from "../ui/Blocks";
 
 const KEY_LIMITS = [/imbalance|penalty/i, /one test month|only one/i, /fictional/i, /observed weather/i];
 
@@ -15,12 +15,19 @@ export function MethodPage() {
 
   return (
     <>
-      <h1 className="statement long">One forecast a day, an hour before the auction closes.</h1>
-      <p className="lede">
-        {meta.data.company} is a fictional utility that supplies the city of Zurich. Each morning it buys tomorrow’s electricity at the Swiss auction, without
-        knowing tomorrow’s demand or price.
-      </p>
+      <PageIntro
+        title="How it works"
+        what={
+          <>
+            the method in short. {meta.data.company} is a fictional utility that supplies the city of Zurich. Each morning it buys tomorrow’s electricity at the
+            Swiss auction, without knowing tomorrow’s demand or price. Two forecasts and a battery plan help it decide.
+          </>
+        }
+        how="read the two cards; the closed sections at the bottom are for reference."
+      />
 
+      <div className="grid-2">
+        <Card n={1} title="One day, step by step">
       <ol className="timeline">
         <li>
           <span className="time">{meta.data.forecast_time_local}</span>
@@ -39,9 +46,9 @@ export function MethodPage() {
           <p>Energy is delivered. Buying too much or too little costs a penalty of {shortage} % of the price.</p>
         </li>
       </ol>
+        </Card>
 
-      <section className="section">
-        <h2>Keep in mind</h2>
+        <Card n={2} title="Keep in mind" hint="The main limits of the results.">
         <div className="limits">
           {shown.map((l) => (
             <div key={l.title}>
@@ -50,7 +57,8 @@ export function MethodPage() {
             </div>
           ))}
         </div>
-      </section>
+        </Card>
+      </div>
 
       <div className="folds">
         <Fold title="What the forecast may use" hint={`Only what was published by ${meta.data.forecast_time_local} the day before`}>
