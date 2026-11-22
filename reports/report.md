@@ -21,6 +21,12 @@ must buy tomorrow's electricity on the Swiss day-ahead auction, which closes at 
 blocks of day D+1, plans the battery with a small optimisation model, turns the plan into hourly auction bids and,
 in the backtest, settles them with the real prices and the real demand.
 
+**Research question.** How much can a DSO save by combining a demand forecast and a price forecast with a
+storage-constrained bidding optimisation, compared with naive planning? At its core the project is two machine
+learning models feeding one optimisation problem with battery limits. The setting (company, battery, imbalance
+prices) is fictional, but the architecture – forecast, optimise, bid, settle – does not depend on it: the battery
+settings and the settlement rule can be changed, so a DSO that already owns a battery could use the same tool.
+
 **Key results (test month October 2026).** All model and decision choices were made before October. One weather
 pre-processing choice (which method corrects the bias of the temperature forecast) also looked at October weather
 data, but not at October demand or prices (§8).
@@ -815,6 +821,13 @@ are out of sample, but the decision rules were tuned on these same days, and the
 days (§8). With imbalance factors of 1.1/0.9 instead of 1.2/0.8 the demand part would be roughly halved (§6.6). Whether
 the battery part pays for a 40 MWh battery depends on its investment and operating cost, which is outside this project.
 
+**The battery value is a lower bound.** The project counts only one use of the battery: moving the DSO's own purchase
+from expensive to cheap hours (it may not sell energy back, `allow_sell: false`). In practice a grid battery earns
+money in several ways at once, for example by offering balancing services to Swissgrid or by shaving the DSO's own
+load peaks to lower grid fees. These other incomes are not modelled, so the battery value above is the minimum it
+earns, not its full business case. Whether a grid-owned battery may be used for market trading under Swiss unbundling
+rules should be checked before such a use is planned.
+
 ---
 
 ## 8. Critical evaluation
@@ -836,6 +849,12 @@ the battery part pays for a 40 MWh battery depends on its investment and operati
   Swissgrid settlement is quarter-hourly with a single imbalance price since 2026, and a deviation that helps the
   system can even earn money there. The demand saving depends directly on this (§6.6); the battery value does not.
   Our numbers therefore do not show that the demand forecast beats the battery under real settlement.
+  *In plain words:* our rule fines every MWh the DSO gets wrong by 20 % of the price, so a better demand forecast
+  always saves money. In the real system the DSO's balance group is settled every 15 minutes at a price that follows
+  what Swissgrid paid for balancing energy in that quarter hour. Being short while the whole grid is short is
+  expensive, but being short while the grid is long can cost little or even earn money. Real savings from the demand
+  forecast would therefore be smaller. The method itself does not change: only the settlement rule in the backtest
+  would be replaced.
 - **Cycle definition.** We keep the brief's rule: one cycle = 32 MWh **delivered** to the grid per day. After
   discharge losses a full swing of the usable stored energy delivers only 30.36 MWh, so the battery may do about 5 %
   more than one physical full cycle. In October it did 30.8 cycles by our definition, which is 32.46 full swings of
@@ -870,6 +889,26 @@ the battery part pays for a 40 MWh battery depends on its investment and operati
   With perfect foresight the block rules give up CHF 31,670 of battery value in October against the ceiling:
   CHF 27,002 from coarser dispatch and CHF 4,668 from not moving energy between days (§6.5).
 - **No cross-border capacity data.** Several large price misses were days when Swiss and German prices diverged.
+- **One test month, in plain words.** The October saving comes from only 31 days, and some days save much more than
+  others, so the true monthly value could be roughly half or one and a half times the headline (CHF 129,685 to
+  354,460). The full year cannot replace it, because the decision rules were tuned on those days – like grading an
+  exam that was seen in advance. October is also an autumn month: no winter peak and no summer solar surplus.
+- **Price forecast too low in October.** The price forecast was on average 6.5 EUR/MWh too low in the test month
+  (bias −6.54; the naive rule −19.71), and every model was too low. Prices rose during October and all models lean on
+  recent prices, so they lagged behind the trend. For the battery the order of the hours (which are cheap, which are
+  dear) matters more than the level, so the damage was small: 98 % of the charge bids still cleared. The level does
+  matter for the charge limit price, so a stronger trend could make charge bids fail.
+- **A stronger baseline would shrink the gain.** "Buy last week's demand" is an easy rule to beat. A plain linear
+  regression already reaches 4.54 MW demand error and 12.77 EUR/MWh price error in October, against 3.34 MW and
+  10.99 EUR/MWh for our models. A real DSO already has some forecast, so the fair gain of our models is the gap to such
+  a simple model, which is much smaller than the gap to the naive rule. On price, LightGBM and the random forest alone
+  were worse than the linear model in October; only the final combined model beats it.
+- **The plan ignores forecast uncertainty.** The optimisation treats each forecast as if it were exact. It does not
+  plan for being wrong, for example with scenarios or a safety margin. The code supports a quantile-based limit price
+  (`limit_rule: quantile`), but the tuned settings use the plain factor rule.
+- **The hourly shape is not forecast.** The models forecast 4-hour blocks; the hourly price shape inside a block is the
+  average of the last 7 days of the same day type. The battery earns its money on hourly differences, so part of its
+  plan rests on a recent average, not on a forecast.
 
 ---
 

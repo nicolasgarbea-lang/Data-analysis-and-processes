@@ -24,6 +24,10 @@ battery (CHF 181,033 from the better demand forecast, CHF 45,466 from the batter
 > than the battery under real settlement. The 95 % interval is CHF 129,685 to 354,460 when runs of 7 days are kept
 > together (158,868 to 306,077 if the days were independent).
 
+**Research question:** how much can a DSO save by combining a demand forecast and a price forecast with a
+storage-constrained bidding optimisation, compared with naive planning? Known weak points in plain words: one-pager
+(`day_ahead_planning.md`, after section 6) and report §8.
+
 - One-pager: [`day_ahead_planning.md`](day_ahead_planning.md)
 - Full report: [`reports/report.md`](reports/report.md) · slide outline: [`reports/slide_outline.md`](reports/slide_outline.md)
 
