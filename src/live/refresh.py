@@ -30,6 +30,7 @@ import functools
 import json
 import re
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -641,19 +642,48 @@ def load_cached_tables(today: dt.date | None = None) -> tuple[dict[str, pd.DataF
     return tables, meta["sources"]
 
 
+# One download at a time. The web service answers requests in parallel threads; without this lock, opening the page,
+# planning and pressing the button each started a download, the runs hit the APIs at the same time (some sources
+# then failed or came back empty) and the last run to finish overwrote the cache of the others.
+_REFRESH_LOCK = threading.Lock()
+_LAST_FINISHED: dict[dt.date, float] = {}   # day -> time.time() when its last refresh finished
+
+
 def refresh_tables(today: dt.date | None = None, force: bool = False
                    ) -> tuple[dict[str, pd.DataFrame], list[dict]]:
-    """Stored tables + the newest data of every source. Returns (tables, status list)."""
+    """Stored tables + the newest data of every source. Returns (tables, status list).
+
+    force=False returns today's cache if there is one. force=True downloads again, unless another refresh
+    finished while this call was waiting for the lock (then that fresh result is reused).
+    """
     today = today or zurich_today()
     if not force:
         cached = load_cached_tables(today)
         if cached is not None:
             return cached
-    stored = load_tables()
-    with system_certificates():
-        tables, status = _refresh_all(stored, today, force)
-    save_cache(tables, status, today)
-    return tables, status
+    asked = time.time()
+    with _REFRESH_LOCK:
+        if _LAST_FINISHED.get(today, 0.0) >= asked or not force:
+            cached = load_cached_tables(today)
+            if cached is not None:
+                return cached
+        stored = load_tables()
+        with system_certificates():
+            tables, status = _refresh_all(stored, today, force)
+        save_cache(tables, status, today)
+        _LAST_FINISHED[today] = time.time()
+        return tables, status
+
+
+def fetched_at(today: dt.date | None = None) -> str | None:
+    """UTC time of today's last download (from the cache's status.json), or None."""
+    f = processed_root(today or zurich_today()) / "status.json"
+    if not f.exists():
+        return None
+    try:
+        return json.loads(f.read_text(encoding="utf-8")).get("fetched_at_utc")
+    except (OSError, ValueError):
+        return None
 
 
 def _refresh_all(stored: dict, today: dt.date, force: bool) -> tuple[dict, list[dict]]:
